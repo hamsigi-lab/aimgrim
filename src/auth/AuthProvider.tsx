@@ -14,6 +14,8 @@ interface AuthState {
   familyId: string | null
   setMe: (me: Me) => void
   setActiveChild: (childId: string) => void
+  /** 부모가 자녀 화면에서 대시보드로 돌아가기 */
+  exitToHome: () => void
   enterDemo: () => void
   exitDemo: () => void
   logout: () => Promise<void>
@@ -23,8 +25,9 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null)
 
 function pickChild(me: Me): string | null {
+  // 자녀는 본인 화면으로, 부모는 대시보드(null)에서 시작해 자녀를 고른다
   if (me.member?.role === 'child') return me.member.id
-  return me.children && me.children.length > 0 ? me.children[0].id : null
+  return null
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -67,13 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const enterDemo = useCallback(() => { setStatus('demo'); setActiveChildId('mem_child') }, [])
   const exitDemo = useCallback(() => { setStatus('anon'); setActiveChildId(null) }, [])
+  const exitToHome = useCallback(() => setActiveChildId(null), [])
 
   const familyId = status === 'demo' ? 'fam_demo' : me?.family?.id ?? null
 
   const value = useMemo<AuthState>(() => ({
     status, me, activeChildId, familyId,
-    setMe, setActiveChild: setActiveChildId, enterDemo, exitDemo, logout, refresh,
-  }), [status, me, activeChildId, familyId, setMe, enterDemo, exitDemo, logout, refresh])
+    setMe, setActiveChild: setActiveChildId, exitToHome, enterDemo, exitDemo, logout, refresh,
+  }), [status, me, activeChildId, familyId, setMe, exitToHome, enterDemo, exitDemo, logout, refresh])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

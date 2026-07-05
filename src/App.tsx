@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './state/store'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { Onboarding } from './onboarding/Onboarding'
 import { AddChildScreen } from './onboarding/AddChildScreen'
+import { ParentHome } from './parent/ParentHome'
 import { TodayPanel } from './panels/TodayPanel'
 import { WeekPanel } from './panels/WeekPanel'
 import { MonthPanel } from './panels/MonthPanel'
@@ -32,7 +33,7 @@ function Splash() {
 
 function Shell() {
   const { loading, error, snapshot, points, celebrateTick, lastGain, reload } = useApp()
-  const { status, exitDemo, me } = useAuth()
+  const { status, exitDemo, exitToHome, me } = useAuth()
   const isParent = status !== 'demo' && me?.member?.role === 'parent'
   const [tab, setTab] = useState<Tab>('today')
   const [bump, setBump] = useState(false)
@@ -82,9 +83,12 @@ function Shell() {
       )}
 
       <header className="appbar">
+        {isParent && (
+          <button type="button" className="menu-btn" aria-label="뒤로" onClick={exitToHome} style={{ marginRight: 2 }}>‹</button>
+        )}
         <div className="hi">
           <div className="greet">
-            {isParent ? '오늘도 함께 응원해요 💛' : '안녕, 오늘도 반가워 👋'}
+            {isParent ? '아이의 하루를 함께 봐요 💛' : '안녕, 오늘도 반가워 👋'}
             {isParent && pendingApprovals > 0 && <span className="pending-badge">확인 {pendingApprovals}</span>}
           </div>
           <div className="name">{snapshot.child.name}의 하루</div>
@@ -129,6 +133,11 @@ function Root() {
   // 부모 가입 직후, 아직 자녀가 없으면 자녀 추가 먼저
   if (status === 'authed' && me?.member?.role === 'parent' && (!me.children || me.children.length === 0)) {
     return <AddChildScreen />
+  }
+
+  // 부모는 자녀를 고르기 전까지 대시보드
+  if (status === 'authed' && me?.member?.role === 'parent' && !activeChildId) {
+    return <ParentHome />
   }
 
   if (!familyId || !activeChildId) return <Splash />

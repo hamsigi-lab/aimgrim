@@ -8,6 +8,33 @@ import {
 
 export const scheduleRoutes = new Hono<{ Bindings: Bindings }>()
 
+// 부모 대시보드용 — 가족 내 자녀별 오늘 요약
+scheduleRoutes.get('/family/:familyId/overview', async (c) => {
+  const db = c.env.DB
+  const familyId = c.req.param('familyId')
+  const session = await readSessionParent(db, c.req.header('Cookie') ?? null)
+  if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
+
+  const date = familyDate(familyId)
+  const kids = await db.prepare('SELECT id, display_name, points FROM members WHERE family_id = ? AND role = \'child\' ORDER BY created_at')
+    .bind(familyId).all<{ id: string; display_name: string; points: number }>()
+
+  const children = []
+  for (const k of kids.results) {
+    const total = await db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE child_id = ? AND period = \'day\'').bind(k.id).first<{ n: number }>()
+    const comp = await db.prepare(`
+      SELECT COALESCE(SUM(c.done),0) AS done,
+             COALESCE(SUM(CASE WHEN c.done = 1 AND c.approved = 0 THEN 1 ELSE 0 END),0) AS pending
+      FROM completions c JOIN tasks t ON t.id = c.task_id
+      WHERE t.child_id = ? AND t.period = 'day' AND c.the_date = ?`).bind(k.id, date).first<{ done: number; pending: number }>()
+    children.push({
+      id: k.id, name: k.display_name, points: k.points,
+      todayTotal: total?.n ?? 0, todayDone: comp?.done ?? 0, pending: comp?.pending ?? 0,
+    })
+  }
+  return c.json({ children })
+})
+
 // 데모 가족은 인증 없이 열람 가능(체험), 그 외 가족은 세션이 같은 가족이어야 함
 scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   const familyId = c.req.param('familyId')

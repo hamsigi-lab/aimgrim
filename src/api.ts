@@ -68,3 +68,15 @@ export interface LedgerEntry {
 export function getLedger(childId: string): Promise<{ entries: LedgerEntry[] }> {
   return fetch(`/api/point-ledger?childId=${childId}`).then((r) => json<{ entries: LedgerEntry[] }>(r))
 }
+
+export interface ChildOverview {
+  id: string
+  name: string
+  points: number
+  todayTotal: number
+  todayDone: number
+  pending: number
+}
+export function getOverview(familyId: string): Promise<{ children: ChildOverview[] }> {
+  return fetch(`/api/family/${familyId}/overview`).then((r) => json<{ children: ChildOverview[] }>(r))
+}
