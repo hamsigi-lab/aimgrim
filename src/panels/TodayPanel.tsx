@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { TaskRow } from '../components/TaskRow'
 import { TaskEditor } from '../components/TaskEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
+import { TemplatePicker } from '../components/TemplatePicker'
 import { approveTask } from '../api'
 import { todayLabel } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
@@ -13,6 +14,7 @@ export function TodayPanel() {
   const { status, me } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
   const [encourage, setEncourage] = useState(false)
+  const [templates, setTemplates] = useState(false)
   if (!snapshot) return null
 
   const canManage = status !== 'demo'
@@ -65,14 +67,17 @@ export function TodayPanel() {
       ))}
 
       {snapshot.todayTasks.length === 0 && (
-        <p className="empty-hint">{isChild ? '오늘 내가 해볼 일을 스스로 정해봐 🌱' : '아직 오늘 할일이 없어요. 아래에서 추가해 주세요! 🌱'}</p>
+        <p className="empty-hint">{isChild ? '오늘 내가 해볼 일을 스스로 정해봐 🌱' : '아직 오늘 할일이 없어요. 추천 루틴으로 시작하거나 직접 추가해 주세요! 🌱'}</p>
       )}
 
       {canManage && (
-        <div className="add-row">
+        <div className="add-row" style={{ flexDirection: 'column', gap: 8 }}>
           <button type="button" className="add-btn" onClick={() => setEditor({})}>
             {isChild ? '＋ 오늘 내가 할 일 정하기' : '＋ 할일 추가'}
           </button>
+          {snapshot.todayTasks.length === 0 && (
+            <button type="button" className="add-btn tpl" onClick={() => setTemplates(true)}>✨ 추천 루틴으로 시작하기</button>
+          )}
         </div>
       )}
 
@@ -82,6 +87,9 @@ export function TodayPanel() {
       )}
       {encourage && isParent && (
         <EncourageComposer childId={childId} onClose={() => setEncourage(false)} onSaved={reload} />
+      )}
+      {templates && canManage && (
+        <TemplatePicker childId={childId} onClose={() => setTemplates(false)} onSaved={reload} />
       )}
     </div>
   )
