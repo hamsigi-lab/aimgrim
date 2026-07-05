@@ -1,6 +1,5 @@
 import { useApp } from '../state/store'
 import { Mascot } from '../components/Mascot'
-import { rewardGoals, encouragements } from '../data/mock'
 
 const SAYINGS = [
   '잘하고 있어! 조금만 더 모으면 돼 ✨',
@@ -10,9 +9,10 @@ const SAYINGS = [
 ]
 
 export function PointsPanel({ celebrating }: { celebrating: boolean }) {
-  const { points } = useApp()
+  const { snapshot, points } = useApp()
+  if (!snapshot) return null
   const say = SAYINGS[Math.floor(points / 40) % SAYINGS.length]
-  const cheer = encouragements.find((e) => e.from === 'dad')
+  const cheer = snapshot.encouragements.find((e) => e.from === 'dad')
 
   return (
     <div className="panel">
@@ -28,7 +28,7 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
 
       <div className="sechead"><h3>갖고 싶은 것</h3><span className="count">내가 정한 목표</span></div>
 
-      {rewardGoals.map((r) => {
+      {snapshot.rewardGoals.map((r) => {
         const pct = Math.min(100, Math.round((r.saved / r.cost) * 100))
         const reachable = points >= r.cost
         const remaining = Math.max(0, r.cost - r.saved)

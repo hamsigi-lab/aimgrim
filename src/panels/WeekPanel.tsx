@@ -1,5 +1,6 @@
-import { weekDays, weekGoals, encouragements } from '../data/mock'
-import type { Goal } from '../types'
+import { useApp } from '../state/store'
+import { weekDays } from '../data/viz'
+import type { ScheduleItem } from '../types'
 
 function ProgressRing({ pct, isToday }: { pct: number; isToday: boolean }) {
   const r = 8
@@ -18,8 +19,10 @@ function ProgressRing({ pct, isToday }: { pct: number; isToday: boolean }) {
   )
 }
 
+const AUTHOR_LABEL: Record<ScheduleItem['author'], string> = { me: '내가', mom: '엄마가', dad: '아빠가' }
+
 /** 주간/월간 목표는 진행 상태만 보여주는 읽기전용 행 */
-function GoalRow({ goal }: { goal: Goal }) {
+function GoalRow({ goal }: { goal: ScheduleItem }) {
   const done = goal.progress >= 100
   return (
     <div className={`task readonly${done ? ' done' : ''}`}>
@@ -32,7 +35,7 @@ function GoalRow({ goal }: { goal: Goal }) {
       <span className="tmid">
         <span className="t">{goal.title}</span>
         <span className="tmeta">
-          <span className={`who ${goal.author}`}>{goal.author === 'me' ? '내가' : goal.author === 'mom' ? '엄마가' : '아빠가'}</span>
+          <span className={`who ${goal.author}`}>{AUTHOR_LABEL[goal.author]}</span>
           <span className="time">{goal.progressLabel}</span>
         </span>
       </span>
@@ -42,7 +45,10 @@ function GoalRow({ goal }: { goal: Goal }) {
 }
 
 export function WeekPanel() {
-  const cheer = encouragements.find((e) => e.from === 'mom')
+  const { snapshot } = useApp()
+  if (!snapshot) return null
+  const cheer = snapshot.encouragements.find((e) => e.from === 'mom')
+
   return (
     <div className="panel">
       <div className="daterow"><span className="big">이번주</span><span className="sub">7월 1일 – 7일</span></div>
@@ -57,8 +63,8 @@ export function WeekPanel() {
         ))}
       </div>
 
-      <div className="sechead"><h3>주간 목표</h3><span className="count">{weekGoals.length}개</span></div>
-      {weekGoals.map((g) => <GoalRow key={g.id} goal={g} />)}
+      <div className="sechead"><h3>주간 목표</h3><span className="count">{snapshot.weekGoals.length}개</span></div>
+      {snapshot.weekGoals.map((g) => <GoalRow key={g.id} goal={g} />)}
 
       {cheer && (
         <div className="cheer-card">

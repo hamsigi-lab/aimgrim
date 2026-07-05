@@ -1,4 +1,4 @@
-import type { Task, Author } from '../types'
+import type { ScheduleItem, Author } from '../types'
 
 const AUTHOR_LABEL: Record<Author, string> = { me: '내가', mom: '엄마가', dad: '아빠가' }
 
@@ -10,7 +10,7 @@ function CheckMark() {
   )
 }
 
-export function TaskRow({ task, onToggle }: { task: Task; onToggle?: (id: string) => void }) {
+export function TaskRow({ task, onToggle }: { task: ScheduleItem; onToggle?: (id: string) => void }) {
   const interactive = !!onToggle
   return (
     <button

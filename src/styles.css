@@ -220,6 +220,14 @@ button { font-family: inherit; }
   100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
 }
 
+/* ---------- Loading / error ---------- */
+.loadwrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; text-align: center; color: var(--ink-soft); }
+.loadmascot { width: 96px; height: 96px; animation: breathe 1.8s ease-in-out infinite; }
+.loadmascot svg { width: 100%; height: 100%; }
+.loadwrap p { margin: 0; font-size: 14px; font-weight: 700; }
+.retry { margin-top: 6px; background: var(--mint); color: #fff; border: none; border-radius: 100px; padding: 10px 20px; font-weight: 800; font-size: 14px; cursor: pointer; }
+@keyframes breathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.03); } }
+
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }

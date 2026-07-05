@@ -1,50 +1,82 @@
 import {
-  createContext, useCallback, useContext, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from 'react'
-import type { Task } from '../types'
-import { todayTasks as initialTasks, startingPoints } from '../data/mock'
+import type { Snapshot } from '../types'
+import { fetchSnapshot, toggleTask as apiToggle } from '../api'
 
 interface AppState {
+  loading: boolean
+  error: string | null
+  snapshot: Snapshot | null
   points: number
-  tasks: Task[]
-  /** 마지막으로 획득한 별점 — 축하 애니메이션 트리거 (0이면 없음) */
+  /** 마지막으로 획득한 별점 — 축하 애니메이션용 */
   lastGain: number
-  /** 축하 이벤트 카운터 — 같은 값 연속 획득도 구분하기 위해 */
+  /** 축하 이벤트 카운터 */
   celebrateTick: number
-  toggleTask: (id: string) => void
   doneCount: number
+  todayTotal: number
+  toggleTask: (id: string) => void
+  reload: () => void
 }
 
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
-  const [points, setPoints] = useState(startingPoints)
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
+  const [points, setPoints] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [lastGain, setLastGain] = useState(0)
   const [celebrateTick, setCelebrateTick] = useState(0)
 
-  const toggleTask = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t
-        const nextDone = !t.done
-        if (nextDone) {
-          setPoints((p) => p + t.points)
-          setLastGain(t.points)
-          setCelebrateTick((c) => c + 1)
-        } else {
-          setPoints((p) => p - t.points)
-        }
-        return { ...t, done: nextDone }
-      }),
-    )
+  const load = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    fetchSnapshot()
+      .then((snap) => { setSnapshot(snap); setPoints(snap.child.points) })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : '불러오기 실패'))
+      .finally(() => setLoading(false))
   }, [])
 
-  const doneCount = tasks.filter((t) => t.done).length
+  useEffect(() => { load() }, [load])
+
+  const toggleTask = useCallback((id: string) => {
+    setSnapshot((prev) => {
+      if (!prev) return prev
+      const task = prev.todayTasks.find((t) => t.id === id)
+      if (!task) return prev
+      const nextDone = !task.done
+      // 낙관적 업데이트
+      if (nextDone) {
+        setPoints((p) => p + task.points)
+        setLastGain(task.points)
+        setCelebrateTick((c) => c + 1)
+      } else {
+        setPoints((p) => Math.max(0, p - task.points))
+      }
+      // 서버 반영 (실패 시 되돌리기)
+      apiToggle(id)
+        .then((res) => setPoints(res.points))
+        .catch(() => {
+          setPoints((p) => (nextDone ? Math.max(0, p - task.points) : p + task.points))
+          setSnapshot((s) =>
+            s ? { ...s, todayTasks: s.todayTasks.map((t) => (t.id === id ? { ...t, done: !nextDone } : t)) } : s,
+          )
+          setError('저장에 실패했어요. 다시 시도해 주세요.')
+        })
+      return {
+        ...prev,
+        todayTasks: prev.todayTasks.map((t) => (t.id === id ? { ...t, done: nextDone } : t)),
+      }
+    })
+  }, [])
+
+  const doneCount = snapshot?.todayTasks.filter((t) => t.done).length ?? 0
+  const todayTotal = snapshot?.todayTasks.length ?? 0
 
   const value = useMemo<AppState>(
-    () => ({ points, tasks, lastGain, celebrateTick, toggleTask, doneCount }),
-    [points, tasks, lastGain, celebrateTick, toggleTask, doneCount],
+    () => ({ loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load }),
+    [loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

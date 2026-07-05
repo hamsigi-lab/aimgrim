@@ -8,17 +8,24 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "typecheck:functions": "tsc --noEmit -p functions/tsconfig.json",
+    "dev:full": "wrangler pages dev --port 8788",
+    "db:migrate:local": "wrangler d1 execute aimgrim-db --local --file=migrations/0001_init.sql && wrangler d1 execute aimgrim-db --local --file=migrations/0002_seed_demo.sql",
+    "db:migrate:remote": "wrangler d1 execute aimgrim-db --remote --file=migrations/0001_init.sql && wrangler d1 execute aimgrim-db --remote --file=migrations/0002_seed_demo.sql"
   },
   "dependencies": {
+    "hono": "^4.12.27",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "wrangler": "^4.107.0"
   }
 }

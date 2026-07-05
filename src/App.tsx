@@ -4,7 +4,7 @@ import { TodayPanel } from './panels/TodayPanel'
 import { WeekPanel } from './panels/WeekPanel'
 import { MonthPanel } from './panels/MonthPanel'
 import { PointsPanel } from './panels/PointsPanel'
-import { childName } from './data/mock'
+import { Mascot } from './components/Mascot'
 
 type Tab = 'today' | 'week' | 'month' | 'points'
 
@@ -16,14 +16,13 @@ const NAV: { id: Tab; icon: string; label: string }[] = [
 ]
 
 function Shell() {
-  const { points, celebrateTick, lastGain } = useApp()
+  const { loading, error, snapshot, points, celebrateTick, lastGain, reload } = useApp()
   const [tab, setTab] = useState<Tab>('today')
   const [bump, setBump] = useState(false)
   const [floatKey, setFloatKey] = useState(0)
   const [celebrating, setCelebrating] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  // 별점 획득 시 연출: 포인트 pill 튕김 + 떠오르는 +점 + 마스코트 반응
   useEffect(() => {
     if (celebrateTick === 0) return
     setBump(true)
@@ -39,12 +38,35 @@ function Shell() {
     if (bodyRef.current) bodyRef.current.scrollTop = 0
   }
 
+  if (loading) {
+    return (
+      <div className="app">
+        <div className="loadwrap">
+          <div className="loadmascot"><Mascot /></div>
+          <p>불러오는 중…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !snapshot) {
+    return (
+      <div className="app">
+        <div className="loadwrap">
+          <div className="loadmascot"><Mascot /></div>
+          <p>{error ?? '데이터를 불러오지 못했어요.'}</p>
+          <button type="button" className="retry" onClick={reload}>다시 시도</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="appbar">
         <div className="hi">
           <div className="greet">안녕, 오늘도 반가워 👋</div>
-          <div className="name">{childName}의 하루</div>
+          <div className="name">{snapshot.child.name}의 하루</div>
         </div>
         <div className={`points${bump ? ' bump' : ''}`} aria-label={`모은 별점 ${points}점`}>
           <span className="star" aria-hidden="true">⭐</span><b>{points}</b>
