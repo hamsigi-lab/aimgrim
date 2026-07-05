@@ -3,7 +3,8 @@ import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { Mascot } from '../components/Mascot'
 import { RewardEditor } from '../components/RewardEditor'
-import { deleteRewardGoal } from '../api'
+import { LedgerSheet } from '../components/LedgerSheet'
+import { deleteRewardGoal, redeemRewardGoal } from '../api'
 
 const SAYINGS = [
   '잘하고 있어! 조금만 더 모으면 돼 ✨',
@@ -16,6 +17,8 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
   const { snapshot, childId, points, reload } = useApp()
   const { status } = useAuth()
   const [adding, setAdding] = useState(false)
+  const [ledgerOpen, setLedgerOpen] = useState(false)
+  const [redeeming, setRedeeming] = useState<string | null>(null)
   if (!snapshot) return null
   const canManage = status !== 'demo'
   const say = SAYINGS[Math.floor(points / 40) % SAYINGS.length]
@@ -23,6 +26,12 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
   const cheerFrom = cheer?.from === 'dad' ? '아빠' : '엄마'
 
   async function removeReward(id: string) { await deleteRewardGoal(id); reload() }
+  async function redeem(id: string, title: string) {
+    if (!window.confirm(`'${title}'(으)로 별점을 바꿀까요? 🎁`)) return
+    setRedeeming(id)
+    try { await redeemRewardGoal(id); reload() }
+    finally { setRedeeming(null) }
+  }
 
   return (
     <div className="panel">
@@ -34,6 +43,7 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
       <div className="bigpts">
         <div className="n">{points}</div>
         <div className="l">모은 별점 ⭐</div>
+        <button type="button" className="linkbtn" onClick={() => setLedgerOpen(true)}>별점 내역 보기 →</button>
       </div>
 
       <div className="sechead"><h3>갖고 싶은 것</h3><span className="count">내가 정한 목표</span></div>
@@ -55,7 +65,13 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
               </div>
             </div>
             {canManage && !r.redeemed && (
-              <button type="button" className="reward-del" aria-label="삭제" onClick={() => removeReward(r.id)}>✕</button>
+              reachable ? (
+                <button type="button" className="reward-redeem" disabled={redeeming === r.id} onClick={() => redeem(r.id, r.title)}>
+                  {redeeming === r.id ? '…' : '🎁 바꾸기'}
+                </button>
+              ) : (
+                <button type="button" className="reward-del" aria-label="삭제" onClick={() => removeReward(r.id)}>✕</button>
+              )
             )}
           </div>
         )
@@ -79,6 +95,7 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
       {adding && canManage && (
         <RewardEditor childId={childId} onClose={() => setAdding(false)} onSaved={reload} />
       )}
+      {ledgerOpen && <LedgerSheet childId={childId} onClose={() => setLedgerOpen(false)} />}
     </div>
   )
 }

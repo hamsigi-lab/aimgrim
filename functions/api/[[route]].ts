@@ -298,8 +298,8 @@ app.post('/tasks/:taskId/toggle', async (c) => {
   const db = c.env.DB
 
   const task = await db
-    .prepare('SELECT id, family_id, child_id, points FROM tasks WHERE id = ?')
-    .bind(taskId).first<{ id: string; family_id: string; child_id: string; points: number }>()
+    .prepare('SELECT id, family_id, child_id, points, title FROM tasks WHERE id = ?')
+    .bind(taskId).first<{ id: string; family_id: string; child_id: string; points: number; title: string }>()
   if (!task) return c.json({ error: 'task_not_found' }, 404)
 
   // 데모 외 가족은 권한 검증 (자녀는 본인 할일만 — 형제 조작 차단)
@@ -323,8 +323,8 @@ app.post('/tasks/:taskId/toggle', async (c) => {
          approved = CASE WHEN excluded.done = 1 THEN completions.approved ELSE 0 END`,
     ).bind(taskId, date, nextDone ? 1 : 0, nextDone ? now : null),
     db.prepare('UPDATE members SET points = MAX(0, points + ?) WHERE id = ?').bind(delta, task.child_id),
-    db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(randomId('pl'), task.child_id, delta, nextDone ? 'task_done' : 'task_undone', taskId, now),
+    db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(randomId('pl'), task.child_id, delta, nextDone ? 'task_done' : 'task_undone', taskId, task.title, now),
   ])
 
   const updated = await db.prepare('SELECT points FROM members WHERE id = ?').bind(task.child_id).first<{ points: number }>()
@@ -514,6 +514,46 @@ app.delete('/reward-goals/:id', async (c) => {
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
   await db.prepare('DELETE FROM reward_goals WHERE id = ?').bind(id).run()
   return c.json({ ok: true })
+})
+
+// 보상 교환 (별점을 써서 목표를 이룸)
+app.post('/reward-goals/:id/redeem', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const rg = await db.prepare('SELECT id, child_id, title, cost, redeemed_at FROM reward_goals WHERE id = ?')
+    .bind(id).first<{ id: string; child_id: string; title: string; cost: number; redeemed_at: number | null }>()
+  if (!rg) return c.json({ error: 'not_found' }, 404)
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, rg.child_id)
+  if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  if (rg.redeemed_at) return c.json({ error: 'already_redeemed' }, 400)
+
+  const child = await db.prepare('SELECT points FROM members WHERE id = ?').bind(rg.child_id).first<{ points: number }>()
+  if (!child || child.points < rg.cost) return c.json({ error: 'not_enough_points' }, 400)
+
+  const now = Date.now()
+  await db.batch([
+    db.prepare('UPDATE members SET points = points - ? WHERE id = ?').bind(rg.cost, rg.child_id),
+    db.prepare('UPDATE reward_goals SET redeemed_at = ?, saved = ? WHERE id = ?').bind(now, rg.cost, id),
+    db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+      .bind(randomId('pl'), rg.child_id, -rg.cost, 'reward_redeem', rg.title, now),
+  ])
+  const updated = await db.prepare('SELECT points FROM members WHERE id = ?').bind(rg.child_id).first<{ points: number }>()
+  return c.json({ ok: true, points: updated?.points ?? 0 })
+})
+
+// 별점 내역 (적립·차감 이력)
+app.get('/point-ledger', async (c) => {
+  const db = c.env.DB
+  const childId = c.req.query('childId') ?? 'mem_child'
+  if (childId !== 'mem_child') {
+    const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
+    if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  }
+  const rows = await db.prepare('SELECT delta, reason, note, created_at FROM point_ledger WHERE child_id = ? ORDER BY created_at DESC LIMIT 40')
+    .bind(childId).all<{ delta: number; reason: string; note: string | null; created_at: number }>()
+  return c.json({
+    entries: rows.results.map((r) => ({ delta: r.delta, reason: r.reason, note: r.note, createdAt: r.created_at })),
+  })
 })
 
 export const onRequest = handle(app)

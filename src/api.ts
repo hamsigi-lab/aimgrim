@@ -57,3 +57,14 @@ export const approveTask = (id: string) => mutate(`/api/tasks/${id}/approve`, 'P
 export const createEncouragement = (childId: string, message: string) => mutate('/api/encouragements', 'POST', { childId, message })
 export const createRewardGoal = (input: { childId: string; title: string; emoji: string; tone: string; cost: number }) => mutate('/api/reward-goals', 'POST', input)
 export const deleteRewardGoal = (id: string) => mutate(`/api/reward-goals/${id}`, 'DELETE')
+export const redeemRewardGoal = (id: string) => mutate<{ ok: boolean; points: number }>(`/api/reward-goals/${id}/redeem`, 'POST', {})
+
+export interface LedgerEntry {
+  delta: number
+  reason: string
+  note: string | null
+  createdAt: number
+}
+export function getLedger(childId: string): Promise<{ entries: LedgerEntry[] }> {
+  return fetch(`/api/point-ledger?childId=${childId}`).then((r) => json<{ entries: LedgerEntry[] }>(r))
+}

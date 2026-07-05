@@ -32,7 +32,8 @@ function Splash() {
 
 function Shell() {
   const { loading, error, snapshot, points, celebrateTick, lastGain, reload } = useApp()
-  const { status, exitDemo } = useAuth()
+  const { status, exitDemo, me } = useAuth()
+  const isParent = status !== 'demo' && me?.member?.role === 'parent'
   const [tab, setTab] = useState<Tab>('today')
   const [bump, setBump] = useState(false)
   const [floatKey, setFloatKey] = useState(0)
@@ -69,6 +70,8 @@ function Shell() {
     )
   }
 
+  const pendingApprovals = snapshot.todayTasks.filter((t) => t.done && !t.approved).length
+
   return (
     <div className="app">
       {isDemo && (
@@ -80,7 +83,10 @@ function Shell() {
 
       <header className="appbar">
         <div className="hi">
-          <div className="greet">안녕, 오늘도 반가워 👋</div>
+          <div className="greet">
+            {isParent ? '오늘도 함께 응원해요 💛' : '안녕, 오늘도 반가워 👋'}
+            {isParent && pendingApprovals > 0 && <span className="pending-badge">확인 {pendingApprovals}</span>}
+          </div>
           <div className="name">{snapshot.child.name}의 하루</div>
         </div>
         <div className={`points${bump ? ' bump' : ''}`} aria-label={`모은 별점 ${points}점`}>
