@@ -5,6 +5,7 @@ import { TaskRow } from '../components/TaskRow'
 import { TaskEditor } from '../components/TaskEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { approveTask } from '../api'
+import { todayLabel } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
 export function TodayPanel() {
@@ -16,13 +17,18 @@ export function TodayPanel() {
 
   const canManage = status !== 'demo'
   const isParent = canManage && me?.member?.role === 'parent'
+  const isChild = !isParent
   const hero = snapshot.weekGoals[0]
+  const date = todayLabel(snapshot.today)
 
   async function onApprove(id: string) { await approveTask(id); reload() }
 
   return (
     <div className="panel">
-      <div className="daterow"><span className="big">7월 5일</span><span className="sub">토요일 · 오늘</span></div>
+      <div className="daterow">
+        <span className="big">{date.big}</span><span className="sub">{date.sub}</span>
+        {snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
+      </div>
 
       {hero && (
         <div className="goal">
@@ -59,12 +65,14 @@ export function TodayPanel() {
       ))}
 
       {snapshot.todayTasks.length === 0 && (
-        <p className="empty-hint">아직 오늘 할일이 없어요. 아래에서 추가해 봐요! 🌱</p>
+        <p className="empty-hint">{isChild ? '오늘 내가 해볼 일을 스스로 정해봐 🌱' : '아직 오늘 할일이 없어요. 아래에서 추가해 주세요! 🌱'}</p>
       )}
 
       {canManage && (
         <div className="add-row">
-          <button type="button" className="add-btn" onClick={() => setEditor({})}>＋ 할일 추가</button>
+          <button type="button" className="add-btn" onClick={() => setEditor({})}>
+            {isChild ? '＋ 오늘 내가 할 일 정하기' : '＋ 할일 추가'}
+          </button>
         </div>
       )}
 

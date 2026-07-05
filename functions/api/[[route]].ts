@@ -226,24 +226,48 @@ app.get('/family/:familyId/snapshot', async (c) => {
     .bind(childId, familyId).first<{ display_name: string; points: number }>()
   if (!child) return c.json({ error: 'child_not_found' }, 404)
 
-  const taskSql = `
+  const date = familyDate(familyId)
+
+  // 하루 할일: 매일 반복 루틴 → 오늘 날짜의 완료 상태만 조인 (매일 리셋)
+  const dayRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
            t.points, t.time_label, t.progress, t.progress_label, c.done, c.approved
-    FROM tasks t
-    JOIN members am ON am.id = t.author_id
-    LEFT JOIN completions c ON c.task_id = t.id
-    WHERE t.child_id = ? AND t.period = ?
-    ORDER BY t.sort_order`
+    FROM tasks t JOIN members am ON am.id = t.author_id
+    LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+    WHERE t.child_id = ? AND t.period = 'day' ORDER BY t.sort_order`).bind(date, childId).all<TaskRow>()
 
-  const today = await db.prepare(taskSql).bind(childId, 'day').all<TaskRow>()
-  const week = await db.prepare(taskSql).bind(childId, 'week').all<TaskRow>()
-  const month = await db.prepare(taskSql).bind(childId, 'month').all<TaskRow>()
+  // 주/월 목표: 완료 개념 없이 진행률만
+  const goalSql = `
+    SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
+           t.points, t.time_label, t.progress, t.progress_label, NULL AS done, NULL AS approved
+    FROM tasks t JOIN members am ON am.id = t.author_id
+    WHERE t.child_id = ? AND t.period = ? ORDER BY t.sort_order`
+  const week = await db.prepare(goalSql).bind(childId, 'week').all<TaskRow>()
+  const month = await db.prepare(goalSql).bind(childId, 'month').all<TaskRow>()
+
   const rewards = await db
-    .prepare('SELECT id, title, emoji, tone, cost, saved FROM reward_goals WHERE child_id = ? ORDER BY sort_order')
-    .bind(childId).all<{ id: string; title: string; emoji: string; tone: string; cost: number; saved: number }>()
+    .prepare('SELECT id, title, emoji, tone, cost, redeemed_at FROM reward_goals WHERE child_id = ? ORDER BY sort_order')
+    .bind(childId).all<{ id: string; title: string; emoji: string; tone: string; cost: number; redeemed_at: number | null }>()
   const cheer = await db
-    .prepare('SELECT id, from_kind, message FROM encouragements WHERE child_id = ? ORDER BY created_at DESC')
-    .bind(childId).all<{ id: string; from_kind: string; message: string }>()
+    .prepare('SELECT id, from_kind, message, created_at FROM encouragements WHERE child_id = ? ORDER BY created_at DESC LIMIT 20')
+    .bind(childId).all<{ id: string; from_kind: string; message: string; created_at: number }>()
+
+  // 완료 이력(하루 할일 기준) — 주간 링·월간 히트맵·연속달성용
+  const hist = await db.prepare(`
+    SELECT c.the_date AS d, COUNT(*) AS done FROM completions c
+    JOIN tasks t ON t.id = c.task_id
+    WHERE t.child_id = ? AND t.period = 'day' AND c.done = 1 GROUP BY c.the_date`).bind(childId).all<{ d: string; done: number }>()
+  const history = hist.results.map((h) => ({ date: h.d, done: h.done }))
+
+  // 연속 달성(streak): 오늘(없으면 어제)부터 완료한 날이 연속인 일수
+  const doneDates = new Set(history.filter((h) => h.done > 0).map((h) => h.date))
+  let streak = 0
+  const cur = new Date(date + 'T00:00:00Z')
+  if (!doneDates.has(date)) cur.setUTCDate(cur.getUTCDate() - 1)
+  for (let i = 0; i < 400; i++) {
+    const ds = cur.toISOString().slice(0, 10)
+    if (doneDates.has(ds)) { streak++; cur.setUTCDate(cur.getUTCDate() - 1) } else break
+  }
 
   const mapTask = (r: TaskRow) => ({
     id: r.id, title: r.title, category: r.category,
@@ -254,12 +278,18 @@ app.get('/family/:familyId/snapshot', async (c) => {
   })
 
   return c.json({
+    today: date,
+    streak,
+    dayTaskCount: dayRows.results.length,
+    history,
     child: { name: child.display_name, points: child.points },
-    todayTasks: today.results.map(mapTask),
+    todayTasks: dayRows.results.map(mapTask),
     weekGoals: week.results.map(mapTask),
     monthGoal: month.results.length ? mapTask(month.results[0]) : null,
-    rewardGoals: rewards.results,
-    encouragements: cheer.results.map((e) => ({ id: e.id, from: e.from_kind, message: e.message })),
+    rewardGoals: rewards.results.map((r) => ({
+      id: r.id, title: r.title, emoji: r.emoji, tone: r.tone, cost: r.cost, redeemed: !!r.redeemed_at,
+    })),
+    encouragements: cheer.results.map((e) => ({ id: e.id, from: e.from_kind, message: e.message, createdAt: e.created_at })),
   })
 })
 
@@ -272,13 +302,14 @@ app.post('/tasks/:taskId/toggle', async (c) => {
     .bind(taskId).first<{ id: string; family_id: string; child_id: string; points: number }>()
   if (!task) return c.json({ error: 'task_not_found' }, 404)
 
-  // 데모 외 가족은 세션 검증
+  // 데모 외 가족은 권한 검증 (자녀는 본인 할일만 — 형제 조작 차단)
   if (task.family_id !== 'fam_demo') {
-    const session = await requireSession(db, c.req.header('Cookie') ?? null)
-    if (!session || session.family_id !== task.family_id) return c.json({ error: 'unauthorized' }, 401)
+    const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
+    if (!auth) return c.json({ error: 'unauthorized' }, 401)
   }
 
-  const comp = await db.prepare('SELECT done FROM completions WHERE task_id = ?').bind(taskId).first<{ done: number }>()
+  const date = familyDate(task.family_id)
+  const comp = await db.prepare('SELECT done FROM completions WHERE task_id = ? AND the_date = ?').bind(taskId, date).first<{ done: number }>()
   const wasDone = !!comp?.done
   const nextDone = !wasDone
   const delta = nextDone ? task.points : -task.points
@@ -286,13 +317,14 @@ app.post('/tasks/:taskId/toggle', async (c) => {
 
   await db.batch([
     db.prepare(
-      `INSERT INTO completions (task_id, done, approved, completed_at) VALUES (?, ?, 0, ?)
-       ON CONFLICT(task_id) DO UPDATE SET done = excluded.done,
-         completed_at = CASE WHEN excluded.done = 1 THEN excluded.completed_at ELSE NULL END`,
-    ).bind(taskId, nextDone ? 1 : 0, nextDone ? now : null),
+      `INSERT INTO completions (task_id, the_date, done, approved, completed_at) VALUES (?, ?, ?, 0, ?)
+       ON CONFLICT(task_id, the_date) DO UPDATE SET done = excluded.done,
+         completed_at = CASE WHEN excluded.done = 1 THEN excluded.completed_at ELSE NULL END,
+         approved = CASE WHEN excluded.done = 1 THEN completions.approved ELSE 0 END`,
+    ).bind(taskId, date, nextDone ? 1 : 0, nextDone ? now : null),
     db.prepare('UPDATE members SET points = MAX(0, points + ?) WHERE id = ?').bind(delta, task.child_id),
     db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(`pl_${now}_${taskId}`, task.child_id, delta, nextDone ? 'task_done' : 'task_undone', taskId, now),
+      .bind(randomId('pl'), task.child_id, delta, nextDone ? 'task_done' : 'task_undone', taskId, now),
   ])
 
   const updated = await db.prepare('SELECT points FROM members WHERE id = ?').bind(task.child_id).first<{ points: number }>()
@@ -304,8 +336,20 @@ app.post('/tasks/:taskId/toggle', async (c) => {
 const CATEGORIES = new Set(['study', 'life', 'health', 'play'])
 const PERIODS = new Set(['day', 'week', 'month'])
 
+// 한국 시간(KST, UTC+9) 기준 오늘 날짜 — 자정~오전9시 전날로 밀리는 것 방지
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+// 데모 가족은 고정 날짜(시드와 일치), 실제 가족은 KST 오늘
+const DEMO_DATE = '2026-07-05'
+function familyDate(familyId: string): string {
+  return familyId === 'fam_demo' ? DEMO_DATE : todayStr()
+}
+
+// 기간별 별점 상한 (자녀 임의 고득점 방지)
+function maxPoints(period: string): number {
+  return period === 'day' ? 50 : period === 'week' ? 200 : 500
 }
 
 /** 세션이 해당 자녀(가족 내)를 다룰 권한이 있는지. parent=가족 내 모든 자녀, child=본인만. */
@@ -337,9 +381,9 @@ app.post('/tasks', async (c) => {
   const title = (body.title ?? '').trim()
   const category = body.category ?? 'life'
   const period = body.period ?? 'day'
-  const points = Math.max(0, Math.min(1000, Math.round(Number(body.points ?? 10))))
   if (!title) return c.json({ error: 'missing_title' }, 400)
   if (!CATEGORIES.has(category) || !PERIODS.has(period)) return c.json({ error: 'invalid_field' }, 400)
+  const points = Math.max(0, Math.min(maxPoints(period), Math.round(Number(body.points ?? 10))))
 
   const now = Date.now()
   const id = randomId('task')
@@ -368,12 +412,14 @@ app.put('/tasks/:id', async (c) => {
   if (!task) return c.json({ error: 'task_not_found' }, 404)
   const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  // 자녀는 부모가 낸 과업을 수정할 수 없다 (본인 작성분만)
+  if (auth.session.role === 'child' && task.author_id !== auth.session.member_id) return c.json({ error: 'forbidden' }, 403)
 
   const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string }>()
   const title = (body.title ?? '').trim()
   const category = body.category ?? 'life'
   if (!title || !CATEGORIES.has(category)) return c.json({ error: 'invalid_field' }, 400)
-  const points = Math.max(0, Math.min(1000, Math.round(Number(body.points ?? 10))))
+  const points = Math.max(0, Math.min(maxPoints(task.period), Math.round(Number(body.points ?? 10))))
   const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
 
   await db.prepare(
@@ -387,12 +433,17 @@ app.put('/tasks/:id', async (c) => {
 app.delete('/tasks/:id', async (c) => {
   const db = c.env.DB
   const taskId = c.req.param('id')
-  const task = await db.prepare('SELECT child_id FROM tasks WHERE id = ?').bind(taskId).first<{ child_id: string }>()
+  const task = await db.prepare('SELECT child_id, author_id FROM tasks WHERE id = ?').bind(taskId).first<{ child_id: string; author_id: string }>()
   if (!task) return c.json({ error: 'task_not_found' }, 404)
   const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  if (auth.session.role === 'child' && task.author_id !== auth.session.member_id) return c.json({ error: 'forbidden' }, 403)
 
+  // 이미 지급된 별점 원복 (이 과업의 ledger 합계만큼 차감) — 완료 후 삭제로 점수 농사 방지
+  const sum = await db.prepare('SELECT COALESCE(SUM(delta),0) AS s FROM point_ledger WHERE task_id = ?').bind(taskId).first<{ s: number }>()
   await db.batch([
+    db.prepare('UPDATE members SET points = MAX(0, points - ?) WHERE id = ?').bind(sum?.s ?? 0, task.child_id),
+    db.prepare('DELETE FROM point_ledger WHERE task_id = ?').bind(taskId),
     db.prepare('DELETE FROM completions WHERE task_id = ?').bind(taskId),
     db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId),
   ])
@@ -408,10 +459,12 @@ app.post('/tasks/:id/approve', async (c) => {
   const task = await db.prepare('SELECT family_id FROM tasks WHERE id = ?').bind(taskId).first<{ family_id: string }>()
   if (!task || task.family_id !== session.family_id) return c.json({ error: 'forbidden' }, 403)
 
-  await db.prepare(
-    `INSERT INTO completions (task_id, done, approved, approved_at) VALUES (?, 1, 1, ?)
-     ON CONFLICT(task_id) DO UPDATE SET approved = 1, approved_at = excluded.approved_at`,
-  ).bind(taskId, Date.now()).run()
+  // 오늘 완료된 건만 승인(칭찬 도장). 완료 안 된 걸 승인해 점수 없는 완료를 만들지 않는다.
+  const date = familyDate(task.family_id)
+  const comp = await db.prepare('SELECT done FROM completions WHERE task_id = ? AND the_date = ?').bind(taskId, date).first<{ done: number }>()
+  if (!comp?.done) return c.json({ error: 'not_completed' }, 400)
+  await db.prepare('UPDATE completions SET approved = 1, approved_at = ? WHERE task_id = ? AND the_date = ?')
+    .bind(Date.now(), taskId, date).run()
   return c.json({ ok: true })
 })
 

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { TaskEditor } from '../components/TaskEditor'
-import { weekDays } from '../data/viz'
+import { weekInfo } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
 function ProgressRing({ pct, isToday }: { pct: number; isToday: boolean }) {
@@ -59,15 +59,15 @@ export function WeekPanel() {
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
   if (!snapshot) return null
   const canManage = status !== 'demo'
-  const cheer = snapshot.encouragements.find((e) => e.from === 'mom')
+  const week = weekInfo(snapshot.today, snapshot.history, snapshot.dayTaskCount)
 
   return (
     <div className="panel">
-      <div className="daterow"><span className="big">이번주</span><span className="sub">7월 1일 – 7일</span></div>
+      <div className="daterow"><span className="big">이번주</span><span className="sub">{week.label}</span></div>
 
       <div className="weekstrip">
-        {weekDays.map((d) => (
-          <div key={d.dayNum} className={`day${d.isToday ? ' today' : ''}`}>
+        {week.days.map((d) => (
+          <div key={d.date} className={`day${d.isToday ? ' today' : ''}`}>
             <div className="dn">{d.dayName}</div>
             <div className="dd">{d.dayNum}</div>
             <ProgressRing pct={d.completion} isToday={d.isToday} />
@@ -84,13 +84,6 @@ export function WeekPanel() {
       {canManage && (
         <div className="add-row">
           <button type="button" className="add-btn" onClick={() => setEditor({})}>＋ 주간 목표 추가</button>
-        </div>
-      )}
-
-      {cheer && (
-        <div className="cheer-card">
-          <div className="from">💜 엄마의 응원</div>
-          <div className="msg">{cheer.message}</div>
         </div>
       )}
 

@@ -26,14 +26,14 @@ export interface ScheduleItem {
   progressLabel: string
 }
 
-/** 자녀가 스스로 정한 보상 목표 (별점으로 교환) */
+/** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */
 export interface RewardGoal {
   id: string
   title: string
   emoji: string
   cost: number
-  saved: number
   tone: RewardTone
+  redeemed: boolean
 }
 
 /** 부모의 격려 메시지 */
@@ -41,22 +41,29 @@ export interface Encouragement {
   id: string
   from: 'mom' | 'dad'
   message: string
+  createdAt: number
+}
+
+/** 하루 완료 이력 (한 날짜에 완료한 할일 수) */
+export interface DayHistory {
+  date: string // YYYY-MM-DD
+  done: number
 }
 
 /** 자녀 한 명의 화면 스냅샷 (API /snapshot 응답) */
 export interface Snapshot {
+  /** 기준 '오늘' 날짜 (KST, 데모는 고정) */
+  today: string
+  /** 연속 달성 일수 */
+  streak: number
+  /** 현재 하루 할일 개수 (완료율 분모) */
+  dayTaskCount: number
+  /** 완료 이력 (주간 링·월간 히트맵용) */
+  history: DayHistory[]
   child: { name: string; points: number }
   todayTasks: ScheduleItem[]
   weekGoals: ScheduleItem[]
   monthGoal: ScheduleItem | null
   rewardGoals: RewardGoal[]
   encouragements: Encouragement[]
-}
-
-/** 주간 진행 (요일별 완료율) — 아직 이력 데이터가 없어 시각화용 placeholder */
-export interface WeekDay {
-  dayName: string
-  dayNum: number
-  completion: number // 0–100
-  isToday: boolean
 }

@@ -19,7 +19,8 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
   if (!snapshot) return null
   const canManage = status !== 'demo'
   const say = SAYINGS[Math.floor(points / 40) % SAYINGS.length]
-  const cheer = snapshot.encouragements.find((e) => e.from === 'dad')
+  const cheer = snapshot.encouragements[0] // 최신 응원 (역할 무관)
+  const cheerFrom = cheer?.from === 'dad' ? '아빠' : '엄마'
 
   async function removeReward(id: string) { await deleteRewardGoal(id); reload() }
 
@@ -38,21 +39,23 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
       <div className="sechead"><h3>갖고 싶은 것</h3><span className="count">내가 정한 목표</span></div>
 
       {snapshot.rewardGoals.map((r) => {
-        const pct = Math.min(100, Math.round((r.saved / r.cost) * 100))
-        const reachable = points >= r.cost
-        const remaining = Math.max(0, r.cost - r.saved)
+        // 진행률은 현재 보유 별점 기준 (별도 저축 개념 없이 단일 지갑)
+        const saved = Math.min(points, r.cost)
+        const pct = r.redeemed ? 100 : Math.min(100, Math.round((saved / r.cost) * 100))
+        const reachable = !r.redeemed && points >= r.cost
+        const remaining = Math.max(0, r.cost - points)
         return (
-          <div className="reward" key={r.id}>
+          <div className={`reward${r.redeemed ? ' redeemed' : ''}`} key={r.id}>
             <div className={`rico ${r.tone}`} aria-hidden="true">{r.emoji}</div>
             <div className="rmid">
               <div className="rt">{r.title}</div>
               <div className="rbar"><i style={{ width: `${pct}%` }} /></div>
-              <div className="rmeta">{r.saved} / {r.cost} ⭐{reachable ? ' · 교환 가능!' : ''}</div>
+              <div className="rmeta">
+                {r.redeemed ? '🎁 받았어요!' : `${saved} / ${r.cost} ⭐${reachable ? ' · 바꿀 수 있어요!' : ` · ${remaining} 남음`}`}
+              </div>
             </div>
-            {canManage ? (
+            {canManage && !r.redeemed && (
               <button type="button" className="reward-del" aria-label="삭제" onClick={() => removeReward(r.id)}>✕</button>
-            ) : (
-              <div className="rgo">{reachable ? '🎉 완료' : remaining >= 500 ? '큰 목표' : `${remaining} 남음`}</div>
             )}
           </div>
         )
@@ -67,8 +70,8 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
       )}
 
       {cheer && (
-        <div className="cheer-card dad">
-          <div className="from">🧡 아빠의 응원</div>
+        <div className={`cheer-card${cheer.from === 'dad' ? ' dad' : ''}`}>
+          <div className="from">{cheer.from === 'dad' ? '🧡' : '💜'} {cheerFrom}의 응원</div>
           <div className="msg">{cheer.message}</div>
         </div>
       )}

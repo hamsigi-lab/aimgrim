@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { TaskEditor } from '../components/TaskEditor'
-import { monthCells, MONTH_WEEKDAYS } from '../data/viz'
+import { monthInfo } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
+
+const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
 export function MonthPanel() {
   const { snapshot, childId, reload } = useApp()
@@ -12,16 +14,17 @@ export function MonthPanel() {
   if (!snapshot) return null
   const canManage = status !== 'demo'
   const goal = snapshot.monthGoal
+  const month = monthInfo(snapshot.today, snapshot.history, snapshot.dayTaskCount)
 
   return (
     <div className="panel">
-      <div className="daterow"><span className="big">이번달</span><span className="sub">7월</span></div>
+      <div className="daterow"><span className="big">이번달</span><span className="sub">{month.label}</span></div>
 
       <div className="month">
-        <div className="mtitle"><b>7월</b><span>완료한 날 18일 🔥</span></div>
+        <div className="mtitle"><b>{month.label}</b><span>{month.doneDays > 0 ? `완료한 날 ${month.doneDays}일 🔥` : '이번달 첫 기록을 만들어봐요'}</span></div>
         <div className="grid">
           {MONTH_WEEKDAYS.map((w) => <div key={w} className="wd">{w}</div>)}
-          {monthCells.map((c, i) => (
+          {month.cells.map((c, i) => (
             <div key={i}
               className={`cell${c.level === 3 ? ' lv3' : c.level === 2 ? ' lv2' : c.level === 1 ? ' lv1' : ''}${c.isToday ? ' today' : ''}${c.day === null ? ' mut' : ''}`}>
               {c.day ?? ''}
