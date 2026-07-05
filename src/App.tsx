@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/store'
+import { AuthProvider, useAuth } from './auth/AuthProvider'
+import { Onboarding } from './onboarding/Onboarding'
+import { AddChildScreen } from './onboarding/AddChildScreen'
 import { TodayPanel } from './panels/TodayPanel'
 import { WeekPanel } from './panels/WeekPanel'
 import { MonthPanel } from './panels/MonthPanel'
 import { PointsPanel } from './panels/PointsPanel'
+import { MenuSheet } from './components/MenuSheet'
 import { Mascot } from './components/Mascot'
 
 type Tab = 'today' | 'week' | 'month' | 'points'
@@ -15,13 +19,27 @@ const NAV: { id: Tab; icon: string; label: string }[] = [
   { id: 'points', icon: '⭐', label: '별점' },
 ]
 
+function Splash() {
+  return (
+    <div className="app">
+      <div className="loadwrap">
+        <div className="loadmascot"><Mascot /></div>
+        <p>불러오는 중…</p>
+      </div>
+    </div>
+  )
+}
+
 function Shell() {
   const { loading, error, snapshot, points, celebrateTick, lastGain, reload } = useApp()
+  const { status, exitDemo } = useAuth()
   const [tab, setTab] = useState<Tab>('today')
   const [bump, setBump] = useState(false)
   const [floatKey, setFloatKey] = useState(0)
   const [celebrating, setCelebrating] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const isDemo = status === 'demo'
 
   useEffect(() => {
     if (celebrateTick === 0) return
@@ -38,17 +56,7 @@ function Shell() {
     if (bodyRef.current) bodyRef.current.scrollTop = 0
   }
 
-  if (loading) {
-    return (
-      <div className="app">
-        <div className="loadwrap">
-          <div className="loadmascot"><Mascot /></div>
-          <p>불러오는 중…</p>
-        </div>
-      </div>
-    )
-  }
-
+  if (loading) return <Splash />
   if (error || !snapshot) {
     return (
       <div className="app">
@@ -63,6 +71,13 @@ function Shell() {
 
   return (
     <div className="app">
+      {isDemo && (
+        <div className="demobar">
+          <span className="db-txt">👀 체험 모드예요 — 우리 가족으로 시작해 볼까요?</span>
+          <button type="button" className="db-btn" onClick={exitDemo}>시작하기</button>
+        </div>
+      )}
+
       <header className="appbar">
         <div className="hi">
           <div className="greet">안녕, 오늘도 반가워 👋</div>
@@ -71,12 +86,13 @@ function Shell() {
         <div className={`points${bump ? ' bump' : ''}`} aria-label={`모은 별점 ${points}점`}>
           <span className="star" aria-hidden="true">⭐</span><b>{points}</b>
         </div>
+        {!isDemo && (
+          <button type="button" className="menu-btn" aria-label="메뉴" onClick={() => setMenuOpen(true)}>⋯</button>
+        )}
       </header>
 
       <main className="body" ref={bodyRef}>
-        {floatKey > 0 && (
-          <div className="float go" key={floatKey} aria-hidden="true">+{lastGain}</div>
-        )}
+        {floatKey > 0 && <div className="float go" key={floatKey} aria-hidden="true">+{lastGain}</div>}
         {tab === 'today' && <TodayPanel />}
         {tab === 'week' && <WeekPanel />}
         {tab === 'month' && <MonthPanel />}
@@ -85,26 +101,43 @@ function Shell() {
 
       <nav className="nav" aria-label="화면 이동">
         {NAV.map((n) => (
-          <button
-            key={n.id}
-            type="button"
-            className={tab === n.id ? 'on' : ''}
-            aria-current={tab === n.id ? 'page' : undefined}
-            onClick={() => go(n.id)}
-          >
+          <button key={n.id} type="button" className={tab === n.id ? 'on' : ''}
+            aria-current={tab === n.id ? 'page' : undefined} onClick={() => go(n.id)}>
             <span className="ni" aria-hidden="true">{n.icon}</span>
             <span className="nl">{n.label}</span>
           </button>
         ))}
       </nav>
+
+      {menuOpen && <MenuSheet onClose={() => setMenuOpen(false)} />}
     </div>
+  )
+}
+
+function Root() {
+  const { status, me, familyId, activeChildId } = useAuth()
+
+  if (status === 'loading') return <Splash />
+  if (status === 'anon') return <Onboarding />
+
+  // 부모 가입 직후, 아직 자녀가 없으면 자녀 추가 먼저
+  if (status === 'authed' && me?.member?.role === 'parent' && (!me.children || me.children.length === 0)) {
+    return <AddChildScreen />
+  }
+
+  if (!familyId || !activeChildId) return <Splash />
+
+  return (
+    <AppProvider familyId={familyId} childId={activeChildId}>
+      <Shell />
+    </AppProvider>
   )
 }
 
 export default function App() {
   return (
-    <AppProvider>
-      <Shell />
-    </AppProvider>
+    <AuthProvider>
+      <Root />
+    </AuthProvider>
   )
 }

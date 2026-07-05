@@ -21,7 +21,9 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null)
 
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider(
+  { familyId, childId, children }: { familyId: string; childId: string; children: ReactNode },
+) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [points, setPoints] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -32,11 +34,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    fetchSnapshot()
+    fetchSnapshot(familyId, childId)
       .then((snap) => { setSnapshot(snap); setPoints(snap.child.points) })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : '불러오기 실패'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [familyId, childId])
 
   useEffect(() => { load() }, [load])
 
@@ -55,7 +57,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPoints((p) => Math.max(0, p - task.points))
       }
       // 서버 반영 (실패 시 되돌리기)
-      apiToggle(id)
+      apiToggle(id, childId)
         .then((res) => setPoints(res.points))
         .catch(() => {
           setPoints((p) => (nextDone ? Math.max(0, p - task.points) : p + task.points))
@@ -69,7 +71,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         todayTasks: prev.todayTasks.map((t) => (t.id === id ? { ...t, done: nextDone } : t)),
       }
     })
-  }, [])
+  }, [childId])
 
   const doneCount = snapshot?.todayTasks.filter((t) => t.done).length ?? 0
   const todayTotal = snapshot?.todayTasks.length ?? 0
