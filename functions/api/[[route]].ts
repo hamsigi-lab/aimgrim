@@ -299,4 +299,168 @@ app.post('/tasks/:taskId/toggle', async (c) => {
   return c.json({ done: nextDone, points: updated?.points ?? 0, gained: nextDone ? task.points : 0 })
 })
 
+// ---------------- 일정 CRUD / 승인 / 격려 / 보상 ----------------
+
+const CATEGORIES = new Set(['study', 'life', 'health', 'play'])
+const PERIODS = new Set(['day', 'week', 'month'])
+
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** 세션이 해당 자녀(가족 내)를 다룰 권한이 있는지. parent=가족 내 모든 자녀, child=본인만. */
+async function authChild(
+  db: D1Database, cookie: string | null, childId: string,
+): Promise<{ session: SessionRow; parentKind: string | null } | null> {
+  const session = await readSession(db, cookie)
+  if (!session) return null
+  if (session.role === 'child' && session.member_id !== childId) return null
+  const child = await db
+    .prepare('SELECT id FROM members WHERE id = ? AND family_id = ? AND role = \'child\'')
+    .bind(childId, session.family_id).first()
+  if (!child) return null
+  const me = await db.prepare('SELECT parent_kind FROM members WHERE id = ?').bind(session.member_id).first<{ parent_kind: string | null }>()
+  return { session, parentKind: me?.parent_kind ?? null }
+}
+
+// 일정(할일/목표) 생성
+app.post('/tasks', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{
+    childId?: string; title?: string; category?: string; period?: string
+    points?: number; timeLabel?: string; progress?: number; progressLabel?: string
+  }>()
+  const childId = body.childId ?? ''
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
+  if (!auth) return c.json({ error: 'unauthorized' }, 401)
+
+  const title = (body.title ?? '').trim()
+  const category = body.category ?? 'life'
+  const period = body.period ?? 'day'
+  const points = Math.max(0, Math.min(1000, Math.round(Number(body.points ?? 10))))
+  if (!title) return c.json({ error: 'missing_title' }, 400)
+  if (!CATEGORIES.has(category) || !PERIODS.has(period)) return c.json({ error: 'invalid_field' }, 400)
+
+  const now = Date.now()
+  const id = randomId('task')
+  const order = await db.prepare('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM tasks WHERE child_id = ? AND period = ?')
+    .bind(childId, period).first<{ n: number }>()
+  const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
+
+  await db.prepare(
+    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    id, auth.session.family_id, childId, title, category, period, auth.session.member_id, points,
+    period === 'day' ? todayStr() : null, (body.timeLabel ?? '').trim() || null,
+    progress, (body.progressLabel ?? '').trim() || null, order?.n ?? 1, now,
+  ).run()
+
+  return c.json({ ok: true, id })
+})
+
+// 일정 수정
+app.put('/tasks/:id', async (c) => {
+  const db = c.env.DB
+  const taskId = c.req.param('id')
+  const task = await db.prepare('SELECT id, family_id, child_id, author_id, period FROM tasks WHERE id = ?')
+    .bind(taskId).first<{ id: string; family_id: string; child_id: string; author_id: string; period: string }>()
+  if (!task) return c.json({ error: 'task_not_found' }, 404)
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
+  if (!auth) return c.json({ error: 'unauthorized' }, 401)
+
+  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string }>()
+  const title = (body.title ?? '').trim()
+  const category = body.category ?? 'life'
+  if (!title || !CATEGORIES.has(category)) return c.json({ error: 'invalid_field' }, 400)
+  const points = Math.max(0, Math.min(1000, Math.round(Number(body.points ?? 10))))
+  const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
+
+  await db.prepare(
+    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ? WHERE id = ?',
+  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, taskId).run()
+
+  return c.json({ ok: true })
+})
+
+// 일정 삭제
+app.delete('/tasks/:id', async (c) => {
+  const db = c.env.DB
+  const taskId = c.req.param('id')
+  const task = await db.prepare('SELECT child_id FROM tasks WHERE id = ?').bind(taskId).first<{ child_id: string }>()
+  if (!task) return c.json({ error: 'task_not_found' }, 404)
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
+  if (!auth) return c.json({ error: 'unauthorized' }, 401)
+
+  await db.batch([
+    db.prepare('DELETE FROM completions WHERE task_id = ?').bind(taskId),
+    db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId),
+  ])
+  return c.json({ ok: true })
+})
+
+// 부모 승인 (완료한 할일을 부모가 확인)
+app.post('/tasks/:id/approve', async (c) => {
+  const db = c.env.DB
+  const taskId = c.req.param('id')
+  const session = await readSession(db, c.req.header('Cookie') ?? null)
+  if (!session || session.role !== 'parent') return c.json({ error: 'unauthorized' }, 401)
+  const task = await db.prepare('SELECT family_id FROM tasks WHERE id = ?').bind(taskId).first<{ family_id: string }>()
+  if (!task || task.family_id !== session.family_id) return c.json({ error: 'forbidden' }, 403)
+
+  await db.prepare(
+    `INSERT INTO completions (task_id, done, approved, approved_at) VALUES (?, 1, 1, ?)
+     ON CONFLICT(task_id) DO UPDATE SET approved = 1, approved_at = excluded.approved_at`,
+  ).bind(taskId, Date.now()).run()
+  return c.json({ ok: true })
+})
+
+// 부모 격려 작성
+app.post('/encouragements', async (c) => {
+  const db = c.env.DB
+  const session = await readSession(db, c.req.header('Cookie') ?? null)
+  if (!session || session.role !== 'parent') return c.json({ error: 'unauthorized' }, 401)
+  const body = await c.req.json<{ childId?: string; message?: string }>()
+  const childId = body.childId ?? ''
+  const message = (body.message ?? '').trim()
+  if (!message) return c.json({ error: 'missing_message' }, 400)
+  const child = await db.prepare('SELECT id FROM members WHERE id = ? AND family_id = ? AND role = \'child\'')
+    .bind(childId, session.family_id).first()
+  if (!child) return c.json({ error: 'child_not_found' }, 404)
+  const me = await db.prepare('SELECT parent_kind FROM members WHERE id = ?').bind(session.member_id).first<{ parent_kind: string | null }>()
+
+  await db.prepare('INSERT INTO encouragements (id, child_id, from_id, from_kind, message, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(randomId('e'), childId, session.member_id, me?.parent_kind === 'dad' ? 'dad' : 'mom', message.slice(0, 300), Date.now()).run()
+  return c.json({ ok: true })
+})
+
+// 보상 목표 생성 (자녀가 갖고 싶은 것)
+app.post('/reward-goals', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{ childId?: string; title?: string; emoji?: string; tone?: string; cost?: number }>()
+  const childId = body.childId ?? ''
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
+  if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  const title = (body.title ?? '').trim()
+  const cost = Math.max(1, Math.min(100000, Math.round(Number(body.cost ?? 100))))
+  const tone = ['grape', 'apricot', 'mint'].includes(body.tone ?? '') ? body.tone! : 'mint'
+  if (!title) return c.json({ error: 'missing_title' }, 400)
+
+  const order = await db.prepare('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM reward_goals WHERE child_id = ?').bind(childId).first<{ n: number }>()
+  await db.prepare('INSERT INTO reward_goals (id, child_id, title, emoji, tone, cost, saved, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)')
+    .bind(randomId('rg'), childId, title, (body.emoji ?? '🎁').slice(0, 4) || '🎁', tone, cost, order?.n ?? 1, Date.now()).run()
+  return c.json({ ok: true })
+})
+
+app.delete('/reward-goals/:id', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const rg = await db.prepare('SELECT child_id FROM reward_goals WHERE id = ?').bind(id).first<{ child_id: string }>()
+  if (!rg) return c.json({ error: 'not_found' }, 404)
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, rg.child_id)
+  if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  await db.prepare('DELETE FROM reward_goals WHERE id = ?').bind(id).run()
+  return c.json({ ok: true })
+})
+
 export const onRequest = handle(app)

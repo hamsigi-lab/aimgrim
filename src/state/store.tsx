@@ -5,6 +5,7 @@ import type { Snapshot } from '../types'
 import { fetchSnapshot, toggleTask as apiToggle } from '../api'
 
 interface AppState {
+  childId: string
   loading: boolean
   error: string | null
   snapshot: Snapshot | null
@@ -77,8 +78,8 @@ export function AppProvider(
   const todayTotal = snapshot?.todayTasks.length ?? 0
 
   const value = useMemo<AppState>(
-    () => ({ loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load }),
-    [loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load],
+    () => ({ childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load }),
+    [childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

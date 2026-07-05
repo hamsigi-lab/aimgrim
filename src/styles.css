@@ -296,6 +296,39 @@ button { font-family: inherit; }
 .child-switch button { border: 1.5px solid var(--line); background: #fff; border-radius: 100px; padding: 8px 14px; font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit; color: var(--ink-soft); }
 .child-switch button.on { border-color: var(--mint); background: var(--mint-wash); color: var(--mint-deep); }
 
+/* ---------- Editors (category chips, stepper, range) ---------- */
+.cat-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cat-chip { border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 10px 4px; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit; color: var(--ink-soft); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.cat-chip.on.study { border-color: var(--grape); background: var(--grape-wash); color: #6A55C9; }
+.cat-chip.on.life { border-color: var(--mint); background: var(--mint-wash); color: var(--mint-deep); }
+.cat-chip.on.health { border-color: var(--rose); background: #FFE6EE; color: #C43D6B; }
+.cat-chip.on.play { border-color: var(--apricot); background: var(--apricot-wash); color: #D2673B; }
+
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 42px; height: 42px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; font-size: 22px; font-weight: 800; cursor: pointer; color: var(--mint-deep); font-family: inherit; }
+.stepper .pv { font-family: var(--round); font-weight: 800; font-size: 18px; color: var(--gold); min-width: 78px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.range { width: 100%; accent-color: var(--mint); height: 28px; }
+
+textarea.msg-input { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 15px; font-size: 15px; font-family: inherit; resize: none; min-height: 88px; color: var(--ink); }
+textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow: 0 0 0 3px var(--mint-wash); }
+
+/* Add / FAB button */
+.add-row { display: flex; justify-content: center; margin: 4px 0 10px; }
+.add-btn { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1.5px dashed var(--mint); color: var(--mint-deep); border-radius: 16px; padding: 12px 18px; font-weight: 800; font-size: 14px; cursor: pointer; font-family: inherit; width: 100%; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.add-btn:active { transform: scale(.99); }
+
+/* task row edit handle + approve */
+.task-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.task-wrap .task { margin-bottom: 0; flex: 1; min-width: 0; }
+.task-side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; justify-content: center; }
+.edit-handle { border: 1.5px solid var(--line); background: #fff; border-radius: 12px; font-size: 15px; cursor: pointer; color: var(--ink-faint); font-family: inherit; padding: 8px 10px; }
+.approve-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--sun); color: #fff; border: none; border-radius: 12px; padding: 8px 10px; font-size: 11.5px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.approved-tag { font-size: 10.5px; font-weight: 800; color: var(--good); background: var(--good-wash); padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+
+.reward-del { background: none; border: none; color: var(--ink-faint); font-size: 16px; cursor: pointer; padding: 4px 8px; }
+.empty-hint { text-align: center; color: var(--ink-faint); font-size: 13.5px; font-weight: 600; padding: 18px 10px; line-height: 1.6; }
+
 /* ---------- Demo banner ---------- */
 .demobar { display: flex; align-items: center; gap: 10px; background: var(--grape-wash); border-bottom: 1.5px solid #E2D9FA; padding: 9px 16px calc(9px); font-size: 12.5px; font-weight: 700; color: #6A55C9; }
 .demobar .db-txt { flex: 1; }

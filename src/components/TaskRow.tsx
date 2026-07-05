@@ -10,9 +10,21 @@ function CheckMark() {
   )
 }
 
-export function TaskRow({ task, onToggle }: { task: ScheduleItem; onToggle?: (id: string) => void }) {
+interface Props {
+  task: ScheduleItem
+  onToggle?: (id: string) => void
+  onEdit?: (task: ScheduleItem) => void
+  onApprove?: (id: string) => void
+  canApprove?: boolean
+}
+
+export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove }: Props) {
   const interactive = !!onToggle
-  return (
+  const showApprove = canApprove && task.done && !task.approved
+  const showApproved = task.done && task.approved
+  const hasSide = !!onEdit || showApprove
+
+  const row = (
     <button
       type="button"
       className={`task${task.done ? ' done' : ''}${interactive ? '' : ' readonly'}`}
@@ -26,10 +38,23 @@ export function TaskRow({ task, onToggle }: { task: ScheduleItem; onToggle?: (id
         <span className="t">{task.title}</span>
         <span className="tmeta">
           <span className={`who ${task.author}`}>{AUTHOR_LABEL[task.author]}</span>
-          <span className="time">{task.timeLabel}</span>
+          {task.timeLabel && <span className="time">{task.timeLabel}</span>}
+          {showApproved && <span className="approved-tag">💛 확인됨</span>}
         </span>
       </span>
       <span className="pts">+{task.points} ⭐</span>
     </button>
+  )
+
+  if (!hasSide) return row
+
+  return (
+    <div className="task-wrap">
+      {row}
+      <div className="task-side">
+        {showApprove && <button type="button" className="approve-chip" onClick={() => onApprove!(task.id)}>💛 확인</button>}
+        {onEdit && <button type="button" className="edit-handle" aria-label="고치기" onClick={() => onEdit(task)}>✎</button>}
+      </div>
+    </div>
   )
 }

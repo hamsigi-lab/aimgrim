@@ -1,18 +1,27 @@
+import { useState } from 'react'
 import { useApp } from '../state/store'
+import { useAuth } from '../auth/AuthProvider'
 import { Mascot } from '../components/Mascot'
+import { RewardEditor } from '../components/RewardEditor'
+import { deleteRewardGoal } from '../api'
 
 const SAYINGS = [
   '잘하고 있어! 조금만 더 모으면 돼 ✨',
   '우와, 또 해냈네! 최고야 🎉',
   '네가 스스로 해내는 게 멋져 😊',
-  '미술 세트까지 얼마 안 남았어! 🎨',
+  '목표까지 얼마 안 남았어! 🎯',
 ]
 
 export function PointsPanel({ celebrating }: { celebrating: boolean }) {
-  const { snapshot, points } = useApp()
+  const { snapshot, childId, points, reload } = useApp()
+  const { status } = useAuth()
+  const [adding, setAdding] = useState(false)
   if (!snapshot) return null
+  const canManage = status !== 'demo'
   const say = SAYINGS[Math.floor(points / 40) % SAYINGS.length]
   const cheer = snapshot.encouragements.find((e) => e.from === 'dad')
+
+  async function removeReward(id: string) { await deleteRewardGoal(id); reload() }
 
   return (
     <div className="panel">
@@ -38,22 +47,34 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
             <div className="rmid">
               <div className="rt">{r.title}</div>
               <div className="rbar"><i style={{ width: `${pct}%` }} /></div>
-              <div className="rmeta">
-                {r.saved} / {r.cost} ⭐{reachable ? ' · 교환 가능!' : ''}
-              </div>
+              <div className="rmeta">{r.saved} / {r.cost} ⭐{reachable ? ' · 교환 가능!' : ''}</div>
             </div>
-            <div className="rgo">
-              {reachable ? '🎉 완료' : remaining >= 500 ? '큰 목표' : `${remaining} 남음`}
-            </div>
+            {canManage ? (
+              <button type="button" className="reward-del" aria-label="삭제" onClick={() => removeReward(r.id)}>✕</button>
+            ) : (
+              <div className="rgo">{reachable ? '🎉 완료' : remaining >= 500 ? '큰 목표' : `${remaining} 남음`}</div>
+            )}
           </div>
         )
       })}
+
+      {snapshot.rewardGoals.length === 0 && <p className="empty-hint">별점을 모아 이루고 싶은 목표를 정해봐요! 🎯</p>}
+
+      {canManage && (
+        <div className="add-row">
+          <button type="button" className="add-btn" onClick={() => setAdding(true)}>＋ 갖고 싶은 것 추가</button>
+        </div>
+      )}
 
       {cheer && (
         <div className="cheer-card dad">
           <div className="from">🧡 아빠의 응원</div>
           <div className="msg">{cheer.message}</div>
         </div>
+      )}
+
+      {adding && canManage && (
+        <RewardEditor childId={childId} onClose={() => setAdding(false)} onSaved={reload} />
       )}
     </div>
   )

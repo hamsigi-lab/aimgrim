@@ -30,3 +30,30 @@ export function toggleTask(taskId: string, childId = DEMO_CHILD): Promise<Toggle
     body: JSON.stringify({ childId }),
   }).then((r) => json<ToggleResult>(r))
 }
+
+function mutate<T = { ok: boolean }>(path: string, method: string, body?: unknown): Promise<T> {
+  return fetch(path, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }).then((r) => json<T>(r))
+}
+
+export interface TaskInput {
+  childId: string
+  title: string
+  category: string
+  period: 'day' | 'week' | 'month'
+  points: number
+  timeLabel?: string
+  progress?: number
+  progressLabel?: string
+}
+
+export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', input)
+export const updateTask = (id: string, input: Omit<TaskInput, 'childId' | 'period'>) => mutate(`/api/tasks/${id}`, 'PUT', input)
+export const deleteTask = (id: string) => mutate(`/api/tasks/${id}`, 'DELETE')
+export const approveTask = (id: string) => mutate(`/api/tasks/${id}/approve`, 'POST', {})
+export const createEncouragement = (childId: string, message: string) => mutate('/api/encouragements', 'POST', { childId, message })
+export const createRewardGoal = (input: { childId: string; title: string; emoji: string; tone: string; cost: number }) => mutate('/api/reward-goals', 'POST', input)
+export const deleteRewardGoal = (id: string) => mutate(`/api/reward-goals/${id}`, 'DELETE')

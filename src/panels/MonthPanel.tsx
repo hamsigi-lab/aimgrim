@@ -1,9 +1,16 @@
+import { useState } from 'react'
 import { useApp } from '../state/store'
+import { useAuth } from '../auth/AuthProvider'
+import { TaskEditor } from '../components/TaskEditor'
 import { monthCells, MONTH_WEEKDAYS } from '../data/viz'
+import type { ScheduleItem } from '../types'
 
 export function MonthPanel() {
-  const { snapshot } = useApp()
+  const { snapshot, childId, reload } = useApp()
+  const { status } = useAuth()
+  const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
   if (!snapshot) return null
+  const canManage = status !== 'demo'
   const goal = snapshot.monthGoal
 
   return (
@@ -15,29 +22,40 @@ export function MonthPanel() {
         <div className="grid">
           {MONTH_WEEKDAYS.map((w) => <div key={w} className="wd">{w}</div>)}
           {monthCells.map((c, i) => (
-            <div
-              key={i}
-              className={`cell${c.level === 3 ? ' lv3' : c.level === 2 ? ' lv2' : c.level === 1 ? ' lv1' : ''}${c.isToday ? ' today' : ''}${c.day === null ? ' mut' : ''}`}
-            >
+            <div key={i}
+              className={`cell${c.level === 3 ? ' lv3' : c.level === 2 ? ' lv2' : c.level === 1 ? ' lv1' : ''}${c.isToday ? ' today' : ''}${c.day === null ? ' mut' : ''}`}>
               {c.day ?? ''}
             </div>
           ))}
         </div>
       </div>
 
-      {goal && (
+      <div className="sechead"><h3>이달의 목표</h3></div>
+      {goal ? (
+        <div className="goal grape" onClick={canManage ? () => setEditor({ existing: goal }) : undefined}
+          style={canManage ? { cursor: 'pointer' } : undefined}>
+          <div className="lab">이달의 큰 목표{canManage ? ' · 눌러서 고치기' : ''}</div>
+          <div className="txt">{goal.title} 📚</div>
+          <div className="bar"><i style={{ width: `${goal.progress}%` }} /></div>
+          <div className="pct">{goal.progressLabel || `${goal.progress}%`}</div>
+          <svg className="blob" viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="48" fill="rgba(255,255,255,.18)" />
+          </svg>
+        </div>
+      ) : (
         <>
-          <div className="sechead"><h3>이달의 목표</h3><span className="count">1개</span></div>
-          <div className="goal grape">
-            <div className="lab">이달의 큰 목표</div>
-            <div className="txt">{goal.title} 📚</div>
-            <div className="bar"><i style={{ width: `${goal.progress}%` }} /></div>
-            <div className="pct">{goal.progressLabel}</div>
-            <svg className="blob" viewBox="0 0 120 120" aria-hidden="true">
-              <circle cx="60" cy="60" r="48" fill="rgba(255,255,255,.18)" />
-            </svg>
-          </div>
+          <p className="empty-hint">이번달 이루고 싶은 큰 목표를 정해봐요! 📚</p>
+          {canManage && (
+            <div className="add-row">
+              <button type="button" className="add-btn" onClick={() => setEditor({})}>＋ 이달의 목표 정하기</button>
+            </div>
+          )}
         </>
+      )}
+
+      {editor && canManage && (
+        <TaskEditor childId={childId} period="month" existing={editor.existing}
+          onClose={() => setEditor(null)} onSaved={reload} />
       )}
     </div>
   )
