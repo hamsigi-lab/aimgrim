@@ -1,0 +1,13 @@
+{
+  "name": "aimgrim · 우리 가족 하루 계획",
+  "short_name": "aimgrim",
+  "description": "가족이 함께 하루 계획을 세우고, 해내면 별점이 쌓이는 우리집 일정 앱",
+  "lang": "ko",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EAF6F1",
+  "theme_color": "#2FB79A",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

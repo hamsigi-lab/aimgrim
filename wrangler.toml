@@ -1,0 +1,6 @@
+# Cloudflare Pages 설정 — main 브랜치 push 시 자동 배포.
+# Vite 빌드 결과(dist/)를 정적 자산으로 서빙한다.
+# (이후 D1/Functions를 붙일 때 [[d1_databases]] 바인딩을 여기 추가한다.)
+name = "aimgrim"
+compatibility_date = "2026-07-05"
+pages_build_output_dir = "dist"
