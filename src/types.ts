@@ -4,6 +4,7 @@ export type Role = 'parent' | 'child'
 export type Author = 'me' | 'mom' | 'dad'
 export type Category = 'study' | 'life' | 'health' | 'play'
 export type Period = 'day' | 'week' | 'month'
+export type Recur = 'daily' | 'weekdays' | 'once'
 export type RewardTone = 'grape' | 'apricot' | 'mint'
 
 /** 일정 항목 — 할일(day)과 목표(week/month)를 모두 표현하는 통합 타입 */
@@ -24,6 +25,8 @@ export interface ScheduleItem {
   progress: number
   /** 진행 상황 라벨 (예: '2 / 4 권') */
   progressLabel: string
+  /** 하루 할일 반복 규칙 */
+  recur: Recur
 }
 
 /** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */

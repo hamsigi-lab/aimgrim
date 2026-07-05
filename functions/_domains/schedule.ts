@@ -53,13 +53,18 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   if (!child) return c.json({ error: 'child_not_found' }, 404)
 
   const date = familyDate(familyId)
+  const dow = new Date(date + 'T00:00:00Z').getUTCDay() // 0=일..6=토
+  const isWeekday = dow >= 1 && dow <= 5 ? 1 : 0
 
+  // 반복 규칙에 따라 오늘 보여줄 하루 할일만 선별
   const dayRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, c.done, c.approved
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, c.done, c.approved
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day' ORDER BY t.sort_order`).bind(date, childId).all<TaskRow>()
+    WHERE t.child_id = ? AND t.period = 'day'
+      AND (t.recur = 'daily' OR (t.recur = 'weekdays' AND ? = 1) OR (t.recur = 'once' AND t.the_date = ?))
+    ORDER BY t.sort_order`).bind(date, childId, isWeekday, date).all<TaskRow>()
 
   const goalSql = `
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
@@ -97,6 +102,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     timeLabel: r.time_label ?? '', points: r.points,
     done: !!r.done, approved: !!r.approved,
     progress: r.progress, progressLabel: r.progress_label ?? '',
+    recur: r.recur ?? 'daily',
   })
 
   return c.json({
@@ -157,7 +163,7 @@ scheduleRoutes.post('/tasks', async (c) => {
   const db = c.env.DB
   const body = await c.req.json<{
     childId?: string; title?: string; category?: string; period?: string
-    points?: number; timeLabel?: string; progress?: number; progressLabel?: string
+    points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string
   }>()
   const childId = body.childId ?? ''
   const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
@@ -169,6 +175,7 @@ scheduleRoutes.post('/tasks', async (c) => {
   if (!title) return c.json({ error: 'missing_title' }, 400)
   if (!CATEGORIES.has(category) || !PERIODS.has(period)) return c.json({ error: 'invalid_field' }, 400)
   const points = Math.max(0, Math.min(maxPoints(period), Math.round(Number(body.points ?? 10))))
+  const recur = ['daily', 'weekdays', 'once'].includes(body.recur ?? '') ? body.recur! : 'daily'
 
   const now = Date.now()
   const id = randomId('task')
@@ -177,12 +184,12 @@ scheduleRoutes.post('/tasks', async (c) => {
   const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
 
   await db.prepare(
-    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, auth.session.family_id, childId, title, category, period, auth.session.member_id, points,
     period === 'day' ? familyDate(auth.session.family_id) : null, (body.timeLabel ?? '').trim() || null,
-    progress, (body.progressLabel ?? '').trim() || null, order?.n ?? 1, now,
+    progress, (body.progressLabel ?? '').trim() || null, recur, order?.n ?? 1, now,
   ).run()
 
   return c.json({ ok: true, id })
@@ -199,16 +206,17 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
   if (auth.session.role === 'child' && task.author_id !== auth.session.member_id) return c.json({ error: 'forbidden' }, 403)
 
-  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string }>()
+  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string }>()
   const title = (body.title ?? '').trim()
   const category = body.category ?? 'life'
   if (!title || !CATEGORIES.has(category)) return c.json({ error: 'invalid_field' }, 400)
   const points = Math.max(0, Math.min(maxPoints(task.period), Math.round(Number(body.points ?? 10))))
   const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
+  const recur = ['daily', 'weekdays', 'once'].includes(body.recur ?? '') ? body.recur! : 'daily'
 
   await db.prepare(
-    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ? WHERE id = ?',
-  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, taskId).run()
+    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ?, recur = ? WHERE id = ?',
+  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, recur, taskId).run()
 
   return c.json({ ok: true })
 })

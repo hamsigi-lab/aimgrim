@@ -19,6 +19,7 @@ export interface TaskRow {
   id: string; title: string; category: string; author_id: string; child_id: string
   parent_kind: string | null; points: number; time_label: string | null
   progress: number; progress_label: string | null; done: number | null; approved: number | null
+  recur?: string | null
 }
 
 export function authorLabel(authorId: string, childId: string, parentKind: string | null): Author {

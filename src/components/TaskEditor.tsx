@@ -1,6 +1,12 @@
 import { useState } from 'react'
-import type { Category, Period, ScheduleItem } from '../types'
+import type { Category, Period, Recur, ScheduleItem } from '../types'
 import { createTask, updateTask, deleteTask } from '../api'
+
+const RECURS: { id: Recur; label: string }[] = [
+  { id: 'daily', label: '매일' },
+  { id: 'weekdays', label: '평일만' },
+  { id: 'once', label: '오늘만' },
+]
 
 const CATS: { id: Category; label: string; emoji: string }[] = [
   { id: 'study', label: '공부', emoji: '📚' },
@@ -27,6 +33,7 @@ export function TaskEditor({ childId, period, existing, onClose, onSaved }: Prop
   const [timeLabel, setTimeLabel] = useState(existing?.timeLabel ?? '')
   const [progress, setProgress] = useState(existing?.progress ?? 0)
   const [progressLabel, setProgressLabel] = useState(existing?.progressLabel ?? '')
+  const [recur, setRecur] = useState<Recur>(existing?.recur ?? 'daily')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const isGoal = period !== 'day'
@@ -36,9 +43,9 @@ export function TaskEditor({ childId, period, existing, onClose, onSaved }: Prop
     setBusy(true); setErr(null)
     try {
       if (editing) {
-        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel })
+        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur })
       } else {
-        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel })
+        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }
@@ -85,10 +92,20 @@ export function TaskEditor({ childId, period, existing, onClose, onSaved }: Prop
           </div>
 
           {!isGoal ? (
-            <div className="field">
-              <label htmlFor="t-time">언제 (선택)</label>
-              <input id="t-time" value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="예: 오후 4시, 자기 전" maxLength={20} />
-            </div>
+            <>
+              <div className="field">
+                <label>반복</label>
+                <div className="seg">
+                  {RECURS.map((r) => (
+                    <button type="button" key={r.id} className={recur === r.id ? 'on' : ''} onClick={() => setRecur(r.id)}>{r.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="t-time">언제 (선택)</label>
+                <input id="t-time" value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="예: 오후 4시, 자기 전" maxLength={20} />
+              </div>
+            </>
           ) : (
             <>
               <div className="field">

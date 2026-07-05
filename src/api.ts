@@ -48,6 +48,7 @@ export interface TaskInput {
   timeLabel?: string
   progress?: number
   progressLabel?: string
+  recur?: 'daily' | 'weekdays' | 'once'
 }
 
 export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', input)
