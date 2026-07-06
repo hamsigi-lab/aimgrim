@@ -19,6 +19,25 @@ export function todayLabel(iso: string): { big: string; sub: string } {
   }
 }
 
+/** 날짜를 delta일만큼 이동한 ISO 문자열 */
+export function shiftISO(iso: string, delta: number): string {
+  const d = parseISO(iso)
+  d.setUTCDate(d.getUTCDate() + delta)
+  return d.toISOString().slice(0, 10)
+}
+
+/** 보는 날짜 헤더 라벨 (오늘 기준 상대 표기) */
+export function dateHeader(iso: string, todayISO: string): { big: string; sub: string } {
+  const d = parseISO(iso)
+  const diff = Math.round((parseISO(iso).getTime() - parseISO(todayISO).getTime()) / 86_400_000)
+  const rel = diff === 0 ? '오늘' : diff === -1 ? '어제' : diff === 1 ? '내일'
+    : diff < 0 ? `${-diff}일 전` : `${diff}일 후`
+  return {
+    big: `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`,
+    sub: `${WEEKDAY[d.getUTCDay()]}요일 · ${rel}`,
+  }
+}
+
 export interface WeekDayCell {
   date: string
   dayNum: number

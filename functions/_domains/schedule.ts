@@ -8,6 +8,45 @@ import {
 
 export const scheduleRoutes = new Hono<{ Bindings: Bindings }>()
 
+function mapScheduleItem(r: TaskRow) {
+  return {
+    id: r.id, title: r.title, category: r.category,
+    author: authorLabel(r.author_id, r.child_id, r.parent_kind),
+    timeLabel: r.time_label ?? '', points: r.points,
+    done: !!r.done, approved: !!r.approved,
+    progress: r.progress, progressLabel: r.progress_label ?? '',
+    recur: r.recur ?? 'daily',
+  }
+}
+
+// 특정 날짜의 하루 계획(할일 + 그날 완료 상태). 화살표로 날짜 이동 시 사용.
+scheduleRoutes.get('/family/:familyId/day', async (c) => {
+  const db = c.env.DB
+  const familyId = c.req.param('familyId')
+  const childId = c.req.query('childId') ?? 'mem_child'
+  const date = c.req.query('date') ?? familyDate(familyId)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: 'invalid_date' }, 400)
+
+  if (familyId !== 'fam_demo') {
+    const session = await requireSession(db, c.req.header('Cookie') ?? null)
+    if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
+    if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
+  }
+
+  const dow = new Date(date + 'T00:00:00Z').getUTCDay()
+  const isWeekday = dow >= 1 && dow <= 5 ? 1 : 0
+  const rows = await db.prepare(`
+    SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, c.done, c.approved
+    FROM tasks t JOIN members am ON am.id = t.author_id
+    LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+    WHERE t.child_id = ? AND t.period = 'day'
+      AND (t.recur = 'daily' OR (t.recur = 'weekdays' AND ? = 1) OR (t.recur = 'once' AND t.the_date = ?))
+    ORDER BY t.sort_order`).bind(date, childId, isWeekday, date).all<TaskRow>()
+
+  return c.json({ date, tasks: rows.results.map(mapScheduleItem) })
+})
+
 // 부모 대시보드용 — 가족 내 자녀별 오늘 요약
 scheduleRoutes.get('/family/:familyId/overview', async (c) => {
   const db = c.env.DB
@@ -96,14 +135,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     if (doneDates.has(ds)) { streak++; cur.setUTCDate(cur.getUTCDate() - 1) } else break
   }
 
-  const mapTask = (r: TaskRow) => ({
-    id: r.id, title: r.title, category: r.category,
-    author: authorLabel(r.author_id, r.child_id, r.parent_kind),
-    timeLabel: r.time_label ?? '', points: r.points,
-    done: !!r.done, approved: !!r.approved,
-    progress: r.progress, progressLabel: r.progress_label ?? '',
-    recur: r.recur ?? 'daily',
-  })
+  const mapTask = mapScheduleItem
 
   return c.json({
     today: date,
@@ -135,7 +167,14 @@ scheduleRoutes.post('/tasks/:taskId/toggle', async (c) => {
     if (!auth) return c.json({ error: 'unauthorized' }, 401)
   }
 
-  const date = familyDate(task.family_id)
+  // 완료 날짜: 기본은 오늘, 요청에 date가 있으면 그 날짜(단 미래는 선완료 방지)
+  const today = familyDate(task.family_id)
+  const body = await c.req.json<{ date?: string }>().catch(() => ({} as { date?: string }))
+  let date = today
+  if (body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+    if (body.date > today) return c.json({ error: 'future_date' }, 400)
+    date = body.date
+  }
   const comp = await db.prepare('SELECT done FROM completions WHERE task_id = ? AND the_date = ?').bind(taskId, date).first<{ done: number }>()
   const wasDone = !!comp?.done
   const nextDone = !wasDone

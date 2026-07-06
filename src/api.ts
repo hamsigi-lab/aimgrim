@@ -1,5 +1,5 @@
 // aimgrim API 클라이언트. 프로덕션에선 같은 오리진의 /api/*, 로컬 풀스택은 wrangler pages dev.
-import type { Snapshot } from './types'
+import type { Snapshot, ScheduleItem } from './types'
 
 // MVP: 데모 가족/자녀 고정. 이후 온보딩/로그인이 붙으면 실제 값으로 교체된다.
 export const DEMO_FAMILY = 'fam_demo'
@@ -23,12 +23,20 @@ export interface ToggleResult {
   gained: number
 }
 
-export function toggleTask(taskId: string, childId = DEMO_CHILD): Promise<ToggleResult> {
+export function toggleTask(taskId: string, childId = DEMO_CHILD, date?: string): Promise<ToggleResult> {
   return fetch(`/api/tasks/${taskId}/toggle`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ childId }),
+    body: JSON.stringify({ childId, date }),
   }).then((r) => json<ToggleResult>(r))
+}
+
+/** 특정 날짜의 하루 계획 (화살표 날짜 이동용) */
+export function fetchDayTasks(
+  date: string, familyId = DEMO_FAMILY, childId = DEMO_CHILD,
+): Promise<{ date: string; tasks: ScheduleItem[] }> {
+  return fetch(`/api/family/${familyId}/day?childId=${childId}&date=${date}`)
+    .then((r) => json<{ date: string; tasks: ScheduleItem[] }>(r))
 }
 
 function mutate<T = { ok: boolean }>(path: string, method: string, body?: unknown): Promise<T> {
