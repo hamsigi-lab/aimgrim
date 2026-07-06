@@ -105,7 +105,7 @@ function Shell() {
 
       <main className="body" ref={bodyRef}>
         {floatKey > 0 && <div className="float go" key={floatKey} aria-hidden="true">+{lastGain}</div>}
-        {tab === 'today' && <TodayPanel />}
+        {tab === 'today' && <TodayPanel onGoToWeek={() => go('week')} />}
         {tab === 'week' && <WeekPanel />}
         {tab === 'month' && <MonthPanel />}
         {tab === 'points' && <PointsPanel celebrating={celebrating} />}

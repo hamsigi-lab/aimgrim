@@ -9,7 +9,7 @@ import { approveTask } from '../api'
 import { todayLabel } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
-export function TodayPanel() {
+export function TodayPanel({ onGoToWeek }: { onGoToWeek?: () => void }) {
   const { snapshot, childId, toggleTask, doneCount, todayTotal, reload } = useApp()
   const { status, me } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
@@ -20,7 +20,7 @@ export function TodayPanel() {
   const canManage = status !== 'demo'
   const isParent = canManage && me?.member?.role === 'parent'
   const isChild = !isParent
-  const hero = snapshot.weekGoals[0]
+  const weekGoals = snapshot.weekGoals
   const date = todayLabel(snapshot.today)
 
   async function onApprove(id: string) { await approveTask(id); reload() }
@@ -32,17 +32,19 @@ export function TodayPanel() {
         {snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
       </div>
 
-      {hero && (
-        <div className="goal">
-          <div className="lab">이번주 목표</div>
-          <div className="txt">{hero.title} 💪</div>
-          <div className="bar"><i style={{ width: `${hero.progress}%` }} /></div>
-          <div className="pct">{hero.progress}% · 조금만 더!</div>
-          <svg className="blob" viewBox="0 0 120 120" aria-hidden="true">
-            <circle cx="60" cy="60" r="48" fill="rgba(255,255,255,.18)" />
-            <circle cx="60" cy="60" r="30" fill="rgba(255,255,255,.16)" />
-          </svg>
-        </div>
+      {weekGoals.length > 0 && (
+        <button type="button" className="wg-mini" onClick={onGoToWeek}>
+          <span className="wg-lab">🎯 이번주 목표 {weekGoals.length}</span>
+          <span className="wg-strip">
+            {weekGoals.map((g) => (
+              <span className="wg-pill" key={g.id}>
+                <span className={`wg-dot ${g.category}`} aria-hidden="true" />
+                <span className="wg-name">{g.title}</span>
+                <span className="wg-pct">{g.progress}%</span>
+              </span>
+            ))}
+          </span>
+        </button>
       )}
 
       {isParent && (
