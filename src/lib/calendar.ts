@@ -26,6 +26,20 @@ export function shiftISO(iso: string, delta: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** 해당 날짜가 속한 주의 월요일 ISO */
+export function mondayISO(iso: string): string {
+  const d = parseISO(iso)
+  const mondayOffset = (d.getUTCDay() + 6) % 7
+  d.setUTCDate(d.getUTCDate() - mondayOffset)
+  return d.toISOString().slice(0, 10)
+}
+
+/** M/D 짧은 라벨 + 요일 */
+export function shortDay(iso: string): { md: string; wd: string } {
+  const d = parseISO(iso)
+  return { md: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`, wd: WEEKDAY[d.getUTCDay()] }
+}
+
 /** 보는 날짜 헤더 라벨 (오늘 기준 상대 표기) */
 export function dateHeader(iso: string, todayISO: string): { big: string; sub: string } {
   const d = parseISO(iso)

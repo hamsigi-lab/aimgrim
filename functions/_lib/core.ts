@@ -47,6 +47,18 @@ export function maxPoints(period: string): number {
   return period === 'day' ? 50 : period === 'week' ? 200 : 500
 }
 
+// 하루 할일이 특정 날짜에 보여야 하는지 — the_date를 '시작일'로 취급(그 전날엔 안 뜸)
+// 사용: `AND ${DAY_RECUR_SQL}` + 바인딩 순서에 dayRecurBinds(date, isWeekday) 삽입
+export const DAY_RECUR_SQL =
+  "((t.recur = 'once' AND t.the_date = ?) OR (t.recur = 'daily' AND t.the_date <= ?) OR (t.recur = 'weekdays' AND t.the_date <= ? AND ? = 1))"
+export function dayRecurBinds(date: string, isWeekday: number): [string, string, string, number] {
+  return [date, date, date, isWeekday]
+}
+export function isWeekdayOf(date: string): number {
+  const dow = new Date(date + 'T00:00:00Z').getUTCDay()
+  return dow >= 1 && dow <= 5 ? 1 : 0
+}
+
 export async function requireSession(db: D1Database, cookie: string | null): Promise<SessionRow | null> {
   return readSession(db, cookie)
 }

@@ -21,11 +21,14 @@ interface Props {
   childId: string
   period: Period
   existing?: ScheduleItem
+  /** 하루 할일을 특정 날짜에 추가할 때 (주간 보기) */
+  targetDate?: string
+  defaultRecur?: Recur
   onClose: () => void
   onSaved: () => void
 }
 
-export function TaskEditor({ childId, period, existing, onClose, onSaved }: Props) {
+export function TaskEditor({ childId, period, existing, targetDate, defaultRecur, onClose, onSaved }: Props) {
   const editing = !!existing
   const [title, setTitle] = useState(existing?.title ?? '')
   const [category, setCategory] = useState<Category>(existing?.category ?? 'study')
@@ -33,7 +36,7 @@ export function TaskEditor({ childId, period, existing, onClose, onSaved }: Prop
   const [timeLabel, setTimeLabel] = useState(existing?.timeLabel ?? '')
   const [progress, setProgress] = useState(existing?.progress ?? 0)
   const [progressLabel, setProgressLabel] = useState(existing?.progressLabel ?? '')
-  const [recur, setRecur] = useState<Recur>(existing?.recur ?? 'daily')
+  const [recur, setRecur] = useState<Recur>(existing?.recur ?? defaultRecur ?? 'daily')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const isGoal = period !== 'day'
@@ -45,7 +48,7 @@ export function TaskEditor({ childId, period, existing, onClose, onSaved }: Prop
       if (editing) {
         await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur })
       } else {
-        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur })
+        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur, date: targetDate })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }

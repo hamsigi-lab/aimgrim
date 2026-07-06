@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { randomId } from '../_lib/crypto'
 import {
   type Bindings, type TaskRow, CATEGORIES, PERIODS, authorLabel, familyDate, maxPoints,
-  requireSession, authChild, readSessionParent,
+  requireSession, authChild, readSessionParent, DAY_RECUR_SQL, dayRecurBinds, isWeekdayOf,
 } from '../_lib/core'
 
 export const scheduleRoutes = new Hono<{ Bindings: Bindings }>()
@@ -33,18 +33,47 @@ scheduleRoutes.get('/family/:familyId/day', async (c) => {
     if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
   }
 
-  const dow = new Date(date + 'T00:00:00Z').getUTCDay()
-  const isWeekday = dow >= 1 && dow <= 5 ? 1 : 0
+  const isWeekday = isWeekdayOf(date)
   const rows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
            t.points, t.time_label, t.progress, t.progress_label, t.recur, c.done, c.approved
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day'
-      AND (t.recur = 'daily' OR (t.recur = 'weekdays' AND ? = 1) OR (t.recur = 'once' AND t.the_date = ?))
-    ORDER BY t.sort_order`).bind(date, childId, isWeekday, date).all<TaskRow>()
+    WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
+    ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekday)).all<TaskRow>()
 
   return c.json({ date, tasks: rows.results.map(mapScheduleItem) })
+})
+
+// 이번주 하루계획 — 월~일 7일치를 날짜별로 (주간 보기 인라인 입력용)
+scheduleRoutes.get('/family/:familyId/week', async (c) => {
+  const db = c.env.DB
+  const familyId = c.req.param('familyId')
+  const childId = c.req.query('childId') ?? 'mem_child'
+  const start = c.req.query('start') ?? familyDate(familyId) // 월요일 ISO
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return c.json({ error: 'invalid_date' }, 400)
+
+  if (familyId !== 'fam_demo') {
+    const session = await requireSession(db, c.req.header('Cookie') ?? null)
+    if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
+    if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
+  }
+
+  const today = familyDate(familyId)
+  const days = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + i)
+    const date = d.toISOString().slice(0, 10)
+    const rows = await db.prepare(`
+      SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
+             t.points, t.time_label, t.progress, t.progress_label, t.recur, c.done, c.approved
+      FROM tasks t JOIN members am ON am.id = t.author_id
+      LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+      WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
+      ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date))).all<TaskRow>()
+    days.push({ date, isToday: date === today, tasks: rows.results.map(mapScheduleItem) })
+  }
+  return c.json({ start, today, days })
 })
 
 // 부모 대시보드용 — 가족 내 자녀별 오늘 요약
@@ -92,18 +121,15 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   if (!child) return c.json({ error: 'child_not_found' }, 404)
 
   const date = familyDate(familyId)
-  const dow = new Date(date + 'T00:00:00Z').getUTCDay() // 0=일..6=토
-  const isWeekday = dow >= 1 && dow <= 5 ? 1 : 0
 
-  // 반복 규칙에 따라 오늘 보여줄 하루 할일만 선별
+  // 반복 규칙(시작일 기준)에 따라 오늘 보여줄 하루 할일만 선별
   const dayRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
            t.points, t.time_label, t.progress, t.progress_label, t.recur, c.done, c.approved
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day'
-      AND (t.recur = 'daily' OR (t.recur = 'weekdays' AND ? = 1) OR (t.recur = 'once' AND t.the_date = ?))
-    ORDER BY t.sort_order`).bind(date, childId, isWeekday, date).all<TaskRow>()
+    WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
+    ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date))).all<TaskRow>()
 
   const goalSql = `
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
@@ -202,7 +228,7 @@ scheduleRoutes.post('/tasks', async (c) => {
   const db = c.env.DB
   const body = await c.req.json<{
     childId?: string; title?: string; category?: string; period?: string
-    points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string
+    points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; date?: string
   }>()
   const childId = body.childId ?? ''
   const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
@@ -222,12 +248,14 @@ scheduleRoutes.post('/tasks', async (c) => {
     .bind(childId, period).first<{ n: number }>()
   const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
 
+  // 하루 할일의 시작일: 요청 date(주간 보기에서 특정 날짜 추가)가 있으면 그 날짜, 없으면 오늘
+  const startDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : familyDate(auth.session.family_id)
   await db.prepare(
     `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, sort_order, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, auth.session.family_id, childId, title, category, period, auth.session.member_id, points,
-    period === 'day' ? familyDate(auth.session.family_id) : null, (body.timeLabel ?? '').trim() || null,
+    period === 'day' ? startDate : null, (body.timeLabel ?? '').trim() || null,
     progress, (body.progressLabel ?? '').trim() || null, recur, order?.n ?? 1, now,
   ).run()
 

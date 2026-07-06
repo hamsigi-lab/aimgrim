@@ -39,6 +39,15 @@ export function fetchDayTasks(
     .then((r) => json<{ date: string; tasks: ScheduleItem[] }>(r))
 }
 
+export interface WeekDayPlan { date: string; isToday: boolean; tasks: ScheduleItem[] }
+/** 이번주(월~일) 날짜별 하루 계획 (주간 보기 인라인 입력용) */
+export function fetchWeek(
+  start: string, familyId = DEMO_FAMILY, childId = DEMO_CHILD,
+): Promise<{ start: string; today: string; days: WeekDayPlan[] }> {
+  return fetch(`/api/family/${familyId}/week?childId=${childId}&start=${start}`)
+    .then((r) => json<{ start: string; today: string; days: WeekDayPlan[] }>(r))
+}
+
 function mutate<T = { ok: boolean }>(path: string, method: string, body?: unknown): Promise<T> {
   return fetch(path, {
     method,
@@ -57,6 +66,8 @@ export interface TaskInput {
   progress?: number
   progressLabel?: string
   recur?: 'daily' | 'weekdays' | 'once'
+  /** 하루 할일 시작일 (주간 보기에서 특정 날짜에 추가) */
+  date?: string
 }
 
 export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', input)
