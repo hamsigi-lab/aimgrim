@@ -4,8 +4,8 @@ import { parentSignup, parentLogin, ApiError, type Me } from '../auth/api'
 
 type Mode = 'signup' | 'login'
 
-export function ParentAuth({ onBack, onDone }: { onBack: () => void; onDone: (me: Me) => void }) {
-  const [mode, setMode] = useState<Mode>('signup')
+export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack: () => void; onDone: (me: Me) => void; initialMode?: Mode }) {
+  const [mode, setMode] = useState<Mode>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
