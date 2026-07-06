@@ -5,9 +5,11 @@ import { useApp } from '../state/store'
 
 const RECURS: { id: Recur; label: string }[] = [
   { id: 'daily', label: '매일' },
-  { id: 'weekdays', label: '평일만' },
-  { id: 'once', label: '오늘만' },
+  { id: 'weekdays', label: '평일' },
+  { id: 'days', label: '요일' },
+  { id: 'once', label: '한 번' },
 ]
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
 const CATS: { id: Category; label: string; emoji: string }[] = [
   { id: 'study', label: '공부', emoji: '📚' },
@@ -43,6 +45,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
   const [progress, setProgress] = useState(existing?.progress ?? 0)
   const [progressLabel, setProgressLabel] = useState(existing?.progressLabel ?? '')
   const [recur, setRecur] = useState<Recur>(existing?.recur ?? defaultRecur ?? 'daily')
+  const [recurDays, setRecurDays] = useState<number[]>(existing?.recurDays ?? [])
   const [goalId, setGoalId] = useState<string | null>(existing?.goalId ?? prefill?.goalId ?? null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -55,10 +58,11 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
     if (!title.trim()) return
     setBusy(true); setErr(null)
     try {
+      const rd = recur === 'days' ? recurDays : undefined
       if (editing) {
-        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, goalId: goalId ?? undefined })
+        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined })
       } else {
-        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur, date: targetDate, goalId: goalId ?? undefined })
+        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }
@@ -113,6 +117,14 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                     <button type="button" key={r.id} className={recur === r.id ? 'on' : ''} onClick={() => setRecur(r.id)}>{r.label}</button>
                   ))}
                 </div>
+                {recur === 'days' && (
+                  <div className="wd-picker">
+                    {WEEKDAYS.map((w, i) => (
+                      <button type="button" key={i} className={`wd-chip${recurDays.includes(i) ? ' on' : ''}${i === 0 ? ' sun' : ''}`}
+                        onClick={() => setRecurDays((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i])}>{w}</button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label htmlFor="t-time">언제 (선택)</label>
@@ -144,7 +156,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
             </>
           )}
 
-          <button type="button" className="btn primary block" disabled={!title.trim() || busy} onClick={save}>
+          <button type="button" className="btn primary block" disabled={!title.trim() || busy || (recur === 'days' && recurDays.length === 0)} onClick={save}>
             {busy ? '저장 중…' : editing ? '고치기' : '추가하기'}
           </button>
           {editing && (

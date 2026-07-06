@@ -65,7 +65,9 @@ export interface TaskInput {
   timeLabel?: string
   progress?: number
   progressLabel?: string
-  recur?: 'daily' | 'weekdays' | 'once'
+  recur?: 'daily' | 'weekdays' | 'once' | 'days'
+  /** recur='days'일 때 요일 (0=일..6=토) */
+  recurDays?: number[]
   /** 하루 할일 시작일 (주간 보기에서 특정 날짜에 추가) */
   date?: string
   /** 연결할 주/월 목표 id */

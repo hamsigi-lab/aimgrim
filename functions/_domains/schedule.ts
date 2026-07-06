@@ -3,7 +3,8 @@ import { Hono } from 'hono'
 import { randomId } from '../_lib/crypto'
 import {
   type Bindings, type TaskRow, CATEGORIES, PERIODS, authorLabel, familyDate, maxPoints,
-  requireSession, authChild, readSessionParent, DAY_RECUR_SQL, dayRecurBinds, isWeekdayOf, occurrencesInRange,
+  requireSession, authChild, readSessionParent, DAY_RECUR_SQL, dayRecurBinds, isWeekdayOf, dayBitOf,
+  daysToMask, maskToDays, occurrencesInRange,
 } from '../_lib/core'
 
 export const scheduleRoutes = new Hono<{ Bindings: Bindings }>()
@@ -23,7 +24,7 @@ function mapScheduleItem(r: TaskRow) {
     timeLabel: r.time_label ?? '', points: r.points,
     done: !!r.done, approved: !!r.approved,
     progress: r.progress, progressLabel: r.progress_label ?? '',
-    recur: r.recur ?? 'daily', goalId: r.goal_id ?? null,
+    recur: r.recur ?? 'daily', recurDays: maskToDays(r.recur_days), goalId: r.goal_id ?? null,
   }
 }
 
@@ -44,11 +45,11 @@ scheduleRoutes.get('/family/:familyId/day', async (c) => {
   const isWeekday = isWeekdayOf(date)
   const rows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.goal_id, c.done, c.approved
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
-    ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekday)).all<TaskRow>()
+    ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekday, dayBitOf(date))).all<TaskRow>()
 
   return c.json({ date, tasks: rows.results.map(mapScheduleItem) })
 })
@@ -74,11 +75,11 @@ scheduleRoutes.get('/family/:familyId/week', async (c) => {
     const date = d.toISOString().slice(0, 10)
     const rows = await db.prepare(`
       SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-             t.points, t.time_label, t.progress, t.progress_label, t.recur, t.goal_id, c.done, c.approved
+             t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
       FROM tasks t JOIN members am ON am.id = t.author_id
       LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
       WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
-      ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date))).all<TaskRow>()
+      ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date), dayBitOf(date))).all<TaskRow>()
     days.push({ date, isToday: date === today, tasks: rows.results.map(mapScheduleItem) })
   }
   return c.json({ start, today, days })
@@ -133,15 +134,15 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   // 반복 규칙(시작일 기준)에 따라 오늘 보여줄 하루 할일만 선별
   const dayRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.goal_id, c.done, c.approved
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
-    ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date))).all<TaskRow>()
+    ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date), dayBitOf(date))).all<TaskRow>()
 
   const goalSql = `
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, NULL AS recur, t.goal_id, NULL AS done, NULL AS approved
+           t.points, t.time_label, t.progress, t.progress_label, NULL AS recur, NULL AS recur_days, t.goal_id, NULL AS done, NULL AS approved
     FROM tasks t JOIN members am ON am.id = t.author_id
     WHERE t.child_id = ? AND t.period = ? ORDER BY t.sort_order`
   const week = await db.prepare(goalSql).bind(childId, 'week').all<TaskRow>()
@@ -172,8 +173,8 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   const mapTask = mapScheduleItem
 
   // 목표 자동 진행률: 연결된 하루 할일의 (기간 내) 완료 / 발생 비율
-  const linked = await db.prepare("SELECT id, goal_id, recur, the_date FROM tasks WHERE child_id = ? AND period = 'day' AND goal_id IS NOT NULL")
-    .bind(childId).all<{ id: string; goal_id: string; recur: string; the_date: string | null }>()
+  const linked = await db.prepare("SELECT id, goal_id, recur, the_date, recur_days FROM tasks WHERE child_id = ? AND period = 'day' AND goal_id IS NOT NULL")
+    .bind(childId).all<{ id: string; goal_id: string; recur: string; the_date: string | null; recur_days: number | null }>()
   const linkedComp = await db.prepare(`
     SELECT c.task_id AS tid, c.the_date AS d FROM completions c
     JOIN tasks t ON t.id = c.task_id
@@ -192,7 +193,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     const tasks = linked.results.filter((t) => t.goal_id === goalId)
     if (tasks.length === 0) return null
     let occ = 0
-    for (const t of tasks) occ += occurrencesInRange(t.recur ?? 'daily', t.the_date ?? aStart, aStart, aEnd)
+    for (const t of tasks) occ += occurrencesInRange(t.recur ?? 'daily', t.the_date ?? aStart, aStart, aEnd, t.recur_days ?? 0)
     if (occ === 0) return 0
     const ids = new Set(tasks.map((t) => t.id))
     const done = linkedComp.results.filter((c2) => ids.has(c2.tid) && c2.d >= aStart && c2.d <= aEnd).length
@@ -269,7 +270,8 @@ scheduleRoutes.post('/tasks', async (c) => {
   const db = c.env.DB
   const body = await c.req.json<{
     childId?: string; title?: string; category?: string; period?: string
-    points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; date?: string; goalId?: string
+    points?: number; timeLabel?: string; progress?: number; progressLabel?: string
+    recur?: string; recurDays?: number[]; date?: string; goalId?: string
   }>()
   const childId = body.childId ?? ''
   const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
@@ -281,7 +283,9 @@ scheduleRoutes.post('/tasks', async (c) => {
   if (!title) return c.json({ error: 'missing_title' }, 400)
   if (!CATEGORIES.has(category) || !PERIODS.has(period)) return c.json({ error: 'invalid_field' }, 400)
   const points = Math.max(0, Math.min(maxPoints(period), Math.round(Number(body.points ?? 10))))
-  const recur = ['daily', 'weekdays', 'once'].includes(body.recur ?? '') ? body.recur! : 'daily'
+  let recur = ['daily', 'weekdays', 'once', 'days'].includes(body.recur ?? '') ? body.recur! : 'daily'
+  let recurDays: number | null = recur === 'days' ? daysToMask(body.recurDays ?? []) : null
+  if (recur === 'days' && !recurDays) { recur = 'daily'; recurDays = null } // 요일 미선택 방어
   // 하루 할일만 목표 연결 가능 — 같은 자녀의 주/월 목표인지 확인
   const goalId = period === 'day' ? await validGoalId(db, body.goalId, childId) : null
 
@@ -294,12 +298,12 @@ scheduleRoutes.post('/tasks', async (c) => {
   // 하루 할일의 시작일: 요청 date(주간 보기에서 특정 날짜 추가)가 있으면 그 날짜, 없으면 오늘
   const startDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : familyDate(auth.session.family_id)
   await db.prepare(
-    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, goal_id, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, auth.session.family_id, childId, title, category, period, auth.session.member_id, points,
     period === 'day' ? startDate : null, (body.timeLabel ?? '').trim() || null,
-    progress, (body.progressLabel ?? '').trim() || null, recur, goalId, order?.n ?? 1, now,
+    progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, order?.n ?? 1, now,
   ).run()
 
   return c.json({ ok: true, id })
@@ -316,18 +320,20 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
   if (auth.session.role === 'child' && task.author_id !== auth.session.member_id) return c.json({ error: 'forbidden' }, 403)
 
-  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; goalId?: string }>()
+  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; recurDays?: number[]; goalId?: string }>()
   const title = (body.title ?? '').trim()
   const category = body.category ?? 'life'
   if (!title || !CATEGORIES.has(category)) return c.json({ error: 'invalid_field' }, 400)
   const points = Math.max(0, Math.min(maxPoints(task.period), Math.round(Number(body.points ?? 10))))
   const progress = Math.max(0, Math.min(100, Math.round(Number(body.progress ?? 0))))
-  const recur = ['daily', 'weekdays', 'once'].includes(body.recur ?? '') ? body.recur! : 'daily'
+  let recur = ['daily', 'weekdays', 'once', 'days'].includes(body.recur ?? '') ? body.recur! : 'daily'
+  let recurDays: number | null = recur === 'days' ? daysToMask(body.recurDays ?? []) : null
+  if (recur === 'days' && !recurDays) { recur = 'daily'; recurDays = null }
   const goalId = task.period === 'day' ? await validGoalId(db, body.goalId, task.child_id) : null
 
   await db.prepare(
-    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ?, recur = ?, goal_id = ? WHERE id = ?',
-  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, recur, goalId, taskId).run()
+    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ?, recur = ?, recur_days = ?, goal_id = ? WHERE id = ?',
+  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, taskId).run()
 
   return c.json({ ok: true })
 })

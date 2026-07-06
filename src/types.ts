@@ -4,7 +4,7 @@ export type Role = 'parent' | 'child'
 export type Author = 'me' | 'mom' | 'dad'
 export type Category = 'study' | 'life' | 'health' | 'play'
 export type Period = 'day' | 'week' | 'month'
-export type Recur = 'daily' | 'weekdays' | 'once'
+export type Recur = 'daily' | 'weekdays' | 'once' | 'days'
 export type RewardTone = 'grape' | 'apricot' | 'mint'
 
 /** 일정 항목 — 할일(day)과 목표(week/month)를 모두 표현하는 통합 타입 */
@@ -27,6 +27,8 @@ export interface ScheduleItem {
   progressLabel: string
   /** 하루 할일 반복 규칙 */
   recur: Recur
+  /** recur='days'일 때 선택된 요일 (0=일 .. 6=토) */
+  recurDays: number[]
   /** 연결된 주/월 목표 id (cascade) */
   goalId: string | null
   /** 목표 진행률이 연결된 할일로 자동 계산됨 */

@@ -362,6 +362,12 @@ button { font-family: inherit; }
 
 .range { width: 100%; accent-color: var(--mint); height: 28px; }
 
+.wd-picker { display: flex; gap: 6px; margin-top: 8px; }
+.wd-chip { flex: 1; border: 1.5px solid var(--line); background: #fff; border-radius: 10px; padding: 9px 0; font-size: 13px; font-weight: 800; color: var(--ink-soft); cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+.wd-chip.sun { color: var(--rose); }
+.wd-chip.on { border-color: var(--mint); background: var(--mint); color: #fff; }
+.wd-chip.on.sun { background: var(--rose); border-color: var(--rose); }
+
 textarea.msg-input { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 15px; font-size: 15px; font-family: inherit; resize: none; min-height: 88px; color: var(--ink); }
 textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow: 0 0 0 3px var(--mint-wash); }
 

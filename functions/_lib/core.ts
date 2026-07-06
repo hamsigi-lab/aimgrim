@@ -19,11 +19,11 @@ export interface TaskRow {
   id: string; title: string; category: string; author_id: string; child_id: string
   parent_kind: string | null; points: number; time_label: string | null
   progress: number; progress_label: string | null; done: number | null; approved: number | null
-  recur?: string | null; goal_id?: string | null
+  recur?: string | null; goal_id?: string | null; recur_days?: number | null
 }
 
 /** recur/시작일 기준으로 [aStart, aEnd] 범위에서 이 할일이 나타나는 날 수 */
-export function occurrencesInRange(recur: string, startISO: string, aStart: string, aEnd: string): number {
+export function occurrencesInRange(recur: string, startISO: string, aStart: string, aEnd: string, recurDaysMask = 0): number {
   const from = startISO > aStart ? startISO : aStart
   if (from > aEnd) return 0
   if (recur === 'once') return startISO >= aStart && startISO <= aEnd ? 1 : 0
@@ -32,7 +32,9 @@ export function occurrencesInRange(recur: string, startISO: string, aStart: stri
   const end = new Date(aEnd + 'T00:00:00Z')
   while (d <= end) {
     const dow = d.getUTCDay()
-    if (recur === 'daily' || (recur === 'weekdays' && dow >= 1 && dow <= 5)) count++
+    if (recur === 'daily'
+      || (recur === 'weekdays' && dow >= 1 && dow <= 5)
+      || (recur === 'days' && (recurDaysMask & (1 << dow)) !== 0)) count++
     d.setUTCDate(d.getUTCDate() + 1)
   }
   return count
@@ -64,15 +66,31 @@ export function maxPoints(period: string): number {
 }
 
 // 하루 할일이 특정 날짜에 보여야 하는지 — the_date를 '시작일'로 취급(그 전날엔 안 뜸)
-// 사용: `AND ${DAY_RECUR_SQL}` + 바인딩 순서에 dayRecurBinds(date, isWeekday) 삽입
+// recur: once(그날) / daily(매일) / weekdays(평일) / days(특정 요일 = recur_days 비트마스크)
+// 사용: `AND ${DAY_RECUR_SQL}` + 바인딩에 dayRecurBinds(date, isWeekday, dayBit) 삽입
 export const DAY_RECUR_SQL =
-  "((t.recur = 'once' AND t.the_date = ?) OR (t.recur = 'daily' AND t.the_date <= ?) OR (t.recur = 'weekdays' AND t.the_date <= ? AND ? = 1))"
-export function dayRecurBinds(date: string, isWeekday: number): [string, string, string, number] {
-  return [date, date, date, isWeekday]
+  "((t.recur = 'once' AND t.the_date = ?)" +
+  " OR (t.recur = 'daily' AND t.the_date <= ?)" +
+  " OR (t.recur = 'weekdays' AND t.the_date <= ? AND ? = 1)" +
+  " OR (t.recur = 'days' AND t.the_date <= ? AND (COALESCE(t.recur_days,0) & ?) != 0))"
+export function dayRecurBinds(date: string, isWeekday: number, dayBit: number): [string, string, string, number, string, number] {
+  return [date, date, date, isWeekday, date, dayBit]
 }
 export function isWeekdayOf(date: string): number {
   const dow = new Date(date + 'T00:00:00Z').getUTCDay()
   return dow >= 1 && dow <= 5 ? 1 : 0
+}
+export function dayBitOf(date: string): number {
+  return 1 << new Date(date + 'T00:00:00Z').getUTCDay()
+}
+export function daysToMask(days: number[]): number {
+  return days.reduce((m, d) => (d >= 0 && d <= 6 ? m | (1 << d) : m), 0)
+}
+export function maskToDays(mask: number | null | undefined): number[] {
+  if (!mask) return []
+  const out: number[] = []
+  for (let d = 0; d <= 6; d++) if (mask & (1 << d)) out.push(d)
+  return out
 }
 
 export async function requireSession(db: D1Database, cookie: string | null): Promise<SessionRow | null> {
