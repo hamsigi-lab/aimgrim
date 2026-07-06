@@ -2,11 +2,73 @@
 import { Hono } from 'hono'
 import { hashPassword, verifyPassword, inviteCode, randomId } from '../_lib/crypto'
 import { createSession, sessionCookie, destroySession, clearSessionCookie, type SessionRow } from '../_lib/session'
+import { verifyGoogleIdToken } from '../_lib/google'
 import {
   type Bindings, type MemberRow, CONSENT_AGE, ageFromBirthYear, requireSession, loadMe,
 } from '../_lib/core'
 
 export const authRoutes = new Hono<{ Bindings: Bindings }>()
+
+// 고유 초대코드 생성
+async function freshInviteCode(db: D1Database): Promise<string> {
+  let code = inviteCode()
+  for (let i = 0; i < 5; i++) {
+    const dup = await db.prepare('SELECT id FROM families WHERE invite_code = ?').bind(code).first()
+    if (!dup) break
+    code = inviteCode()
+  }
+  return code
+}
+
+// Google 계정으로 가입/로그인
+// 신규 사용자는 가족 이름이 필요하므로, 없으면 { needsFamily: true } 로 응답해 프론트가 한 단계 더 받는다.
+authRoutes.post('/auth/google', async (c) => {
+  const db = c.env.DB
+  const clientId = c.env.GOOGLE_CLIENT_ID
+  if (!clientId) return c.json({ error: 'google_not_configured' }, 500)
+
+  const body = await c.req.json<{ credential?: string; familyName?: string; parentKind?: string }>()
+  const claims = await verifyGoogleIdToken(body.credential ?? '', clientId)
+  if (!claims) return c.json({ error: 'invalid_token' }, 401)
+
+  // 기존 계정: google_sub 매칭, 없으면 같은 이메일의 부모 계정에 연동
+  let member = await db.prepare('SELECT id, family_id, role FROM members WHERE google_sub = ?')
+    .bind(claims.sub).first<{ id: string; family_id: string; role: string }>()
+  if (!member) {
+    const byEmail = await db.prepare('SELECT id, family_id, role FROM members WHERE email = ? AND role = \'parent\'')
+      .bind(claims.email).first<{ id: string; family_id: string; role: string }>()
+    if (byEmail) {
+      await db.prepare('UPDATE members SET google_sub = ? WHERE id = ?').bind(claims.sub, byEmail.id).run()
+      member = byEmail
+    }
+  }
+
+  if (member) {
+    const token = await createSession(db, member)
+    c.header('Set-Cookie', sessionCookie(token))
+    const session: SessionRow = { token, member_id: member.id, family_id: member.family_id, role: member.role, expires_at: Date.now() }
+    return c.json(await loadMe(db, session))
+  }
+
+  // 신규 → 가족 이름 필요
+  const familyName = (body.familyName ?? '').trim()
+  if (!familyName) return c.json({ needsFamily: true, name: claims.name ?? '', email: claims.email })
+  const parentKind = body.parentKind === 'dad' ? 'dad' : 'mom'
+
+  const now = Date.now()
+  const familyId = randomId('fam')
+  const memberId = randomId('mem')
+  const code = await freshInviteCode(db)
+  await db.batch([
+    db.prepare('INSERT INTO families (id, name, invite_code, created_at) VALUES (?, ?, ?, ?)').bind(familyId, familyName, code, now),
+    db.prepare('INSERT INTO members (id, family_id, role, parent_kind, display_name, email, google_sub, points, created_at) VALUES (?, ?, \'parent\', ?, ?, ?, ?, 0, ?)')
+      .bind(memberId, familyId, parentKind, claims.name?.trim() || '부모', claims.email, claims.sub, now),
+  ])
+  const token = await createSession(db, { id: memberId, family_id: familyId, role: 'parent' })
+  c.header('Set-Cookie', sessionCookie(token))
+  const session: SessionRow = { token, member_id: memberId, family_id: familyId, role: 'parent', expires_at: now }
+  return c.json(await loadMe(db, session))
+})
 
 authRoutes.post('/auth/parent/signup', async (c) => {
   const db = c.env.DB

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Mascot } from '../components/Mascot'
-import { parentSignup, parentLogin, ApiError, type Me } from '../auth/api'
+import { parentSignup, parentLogin, googleAuth, ApiError, type Me } from '../auth/api'
+import { GoogleButton, googleEnabled } from '../components/GoogleButton'
 
 type Mode = 'signup' | 'login'
 
@@ -13,6 +14,59 @@ export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack:
   const [familyName, setFamilyName] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Google 신규 가입: 가족 이름을 한 단계 더 받는다
+  const [googleCred, setGoogleCred] = useState<string | null>(null)
+
+  async function handleGoogle(credential: string) {
+    setErr(null); setBusy(true)
+    try {
+      const res = await googleAuth(credential)
+      if (res.needsFamily) { setGoogleCred(credential); if (res.name) setName(res.name) }
+      else onDone(res)
+    } catch { setErr('Google 로그인에 문제가 생겼어요. 다시 시도해 주세요.') }
+    finally { setBusy(false) }
+  }
+
+  async function finishGoogleSignup() {
+    if (!googleCred || !familyName.trim()) return
+    setErr(null); setBusy(true)
+    try {
+      const res = await googleAuth(googleCred, familyName.trim(), parentKind)
+      onDone(res)
+    } catch { setErr('가족 만들기에 실패했어요. 다시 시도해 주세요.') }
+    finally { setBusy(false) }
+  }
+
+  // Google 신규 사용자 → 가족 이름 단계
+  if (googleCred) {
+    return (
+      <div className="onb">
+        <div className="backrow"><button type="button" className="backbtn" onClick={() => setGoogleCred(null)}>← 뒤로</button></div>
+        <div className="onb-hero">
+          <div className="mw"><Mascot /></div>
+          <h1>거의 다 됐어요!</h1>
+          <p>{name ? `${name}님, ` : ''}우리 가족 이름만 정해 주세요.</p>
+        </div>
+        <div className="form">
+          {err && <div className="formerr">{err}</div>}
+          <div className="field">
+            <label>나는</label>
+            <div className="seg">
+              <button type="button" className={parentKind === 'mom' ? 'on' : ''} onClick={() => setParentKind('mom')}>엄마</button>
+              <button type="button" className={parentKind === 'dad' ? 'on' : ''} onClick={() => setParentKind('dad')}>아빠</button>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="g-fam">우리 가족 이름</label>
+            <input id="g-fam" value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="예: 지우네" maxLength={20} autoFocus />
+          </div>
+          <button type="button" className="btn primary block" disabled={!familyName.trim() || busy} onClick={finishGoogleSignup}>
+            {busy ? '만드는 중…' : '가족 만들기'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
   const canSignup = emailOk && password.length >= 6 && name.trim() && familyName.trim() && !busy
@@ -44,6 +98,14 @@ export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack:
 
       <div className="form">
         {err && <div className="formerr">{err}</div>}
+
+        {googleEnabled && (
+          <>
+            <GoogleButton onCredential={handleGoogle} />
+            <div className="or-div"><span>또는 이메일로</span></div>
+          </>
+        )}
+
         <div className="field">
           <label htmlFor="p-email">이메일</label>
           <input id="p-email" type="email" autoComplete="email" value={email}

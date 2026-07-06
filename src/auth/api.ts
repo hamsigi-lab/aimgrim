@@ -41,6 +41,15 @@ export function parentLogin(input: { email: string; password: string }): Promise
   return post<Me>('/api/auth/parent/login', input)
 }
 
+export interface GoogleAuthResult extends Me {
+  needsFamily?: boolean
+  name?: string
+  email?: string
+}
+export function googleAuth(credential: string, familyName?: string, parentKind?: 'mom' | 'dad'): Promise<GoogleAuthResult> {
+  return post<GoogleAuthResult>('/api/auth/google', { credential, familyName, parentKind })
+}
+
 export function addChild(input: {
   name: string; birthYear: number; consent: boolean; pin?: string
 }): Promise<Me> {
