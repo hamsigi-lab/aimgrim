@@ -180,6 +180,14 @@ button { font-family: inherit; }
 .day.today { background: var(--mint); border-color: var(--mint); }
 .day.today .dn, .day.today .dd { color: #fff; }
 
+/* ---------- Goal item (진행바 + 담기) ---------- */
+.goal-item { margin-bottom: 12px; }
+.goal-item .task .tmid { min-width: 0; }
+.goal-bar { display: block; height: 6px; background: var(--line); border-radius: 100px; margin-top: 7px; overflow: hidden; }
+.goal-bar i { display: block; height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); transition: width .5s ease; }
+.goal-cascade { width: 100%; background: none; border: 1.5px dashed var(--grape); color: #6A55C9; border-radius: 12px; padding: 8px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; -webkit-tap-highlight-color: transparent; }
+.goal-cascade:active { transform: scale(.99); }
+
 /* ---------- Week view (날짜별 계획) ---------- */
 .wk-days { display: flex; flex-direction: column; gap: 12px; }
 .wk-day { background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 12px 13px; }

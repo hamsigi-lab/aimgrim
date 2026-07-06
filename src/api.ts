@@ -68,6 +68,8 @@ export interface TaskInput {
   recur?: 'daily' | 'weekdays' | 'once'
   /** 하루 할일 시작일 (주간 보기에서 특정 날짜에 추가) */
   date?: string
+  /** 연결할 주/월 목표 id */
+  goalId?: string
 }
 
 export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', input)

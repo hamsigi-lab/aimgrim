@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Category, Period, Recur, ScheduleItem } from '../types'
 import { createTask, updateTask, deleteTask } from '../api'
+import { useApp } from '../state/store'
 
 const RECURS: { id: Recur; label: string }[] = [
   { id: 'daily', label: '매일' },
@@ -17,6 +18,8 @@ const CATS: { id: Category; label: string; emoji: string }[] = [
 
 const PERIOD_LABEL: Record<Period, string> = { day: '오늘 할일', week: '이번주 목표', month: '이번달 목표' }
 
+export interface Prefill { title?: string; category?: Category; goalId?: string }
+
 interface Props {
   childId: string
   period: Period
@@ -24,31 +27,38 @@ interface Props {
   /** 하루 할일을 특정 날짜에 추가할 때 (주간 보기) */
   targetDate?: string
   defaultRecur?: Recur
+  /** 목표에서 '담기'로 열 때 초기값 */
+  prefill?: Prefill
   onClose: () => void
   onSaved: () => void
 }
 
-export function TaskEditor({ childId, period, existing, targetDate, defaultRecur, onClose, onSaved }: Props) {
+export function TaskEditor({ childId, period, existing, targetDate, defaultRecur, prefill, onClose, onSaved }: Props) {
+  const { snapshot } = useApp()
   const editing = !!existing
-  const [title, setTitle] = useState(existing?.title ?? '')
-  const [category, setCategory] = useState<Category>(existing?.category ?? 'study')
+  const [title, setTitle] = useState(existing?.title ?? prefill?.title ?? '')
+  const [category, setCategory] = useState<Category>(existing?.category ?? prefill?.category ?? 'study')
   const [points, setPoints] = useState(existing?.points ?? (period === 'day' ? 10 : 40))
   const [timeLabel, setTimeLabel] = useState(existing?.timeLabel ?? '')
   const [progress, setProgress] = useState(existing?.progress ?? 0)
   const [progressLabel, setProgressLabel] = useState(existing?.progressLabel ?? '')
   const [recur, setRecur] = useState<Recur>(existing?.recur ?? defaultRecur ?? 'daily')
+  const [goalId, setGoalId] = useState<string | null>(existing?.goalId ?? prefill?.goalId ?? null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const isGoal = period !== 'day'
+
+  // 하루 할일이 연결할 수 있는 주/월 목표들
+  const goalOptions = [...(snapshot?.weekGoals ?? []), ...(snapshot?.monthGoal ? [snapshot.monthGoal] : [])]
 
   async function save() {
     if (!title.trim()) return
     setBusy(true); setErr(null)
     try {
       if (editing) {
-        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur })
+        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, goalId: goalId ?? undefined })
       } else {
-        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur, date: targetDate })
+        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur, date: targetDate, goalId: goalId ?? undefined })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }
@@ -108,6 +118,16 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                 <label htmlFor="t-time">언제 (선택)</label>
                 <input id="t-time" value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="예: 오후 4시, 자기 전" maxLength={20} />
               </div>
+              {goalOptions.length > 0 && (
+                <div className="field">
+                  <label htmlFor="t-goal">어떤 목표를 위한 일인가요? (선택)</label>
+                  <select id="t-goal" className="sel" value={goalId ?? ''} onChange={(e) => setGoalId(e.target.value || null)}>
+                    <option value="">목표 연결 안 함</option>
+                    {goalOptions.map((g) => <option key={g.id} value={g.id}>🎯 {g.title}</option>)}
+                  </select>
+                  <span className="hint">연결하면 이 할일을 해낼수록 목표 진행률이 자동으로 올라가요.</span>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -115,6 +135,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                 <label htmlFor="t-prog">진행률: {progress}%</label>
                 <input id="t-prog" type="range" min={0} max={100} step={5} value={progress}
                   onChange={(e) => setProgress(Number(e.target.value))} className="range" />
+                <span className="hint">연결된 할일이 있으면 진행률은 완료율로 자동 계산돼요. (연결 없을 때만 수동)</span>
               </div>
               <div className="field">
                 <label htmlFor="t-plab">진행 메모 (선택)</label>

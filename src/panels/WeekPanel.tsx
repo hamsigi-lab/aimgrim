@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
-import { TaskEditor } from '../components/TaskEditor'
+import { TaskEditor, type Prefill } from '../components/TaskEditor'
 import { TaskRow } from '../components/TaskRow'
 import { fetchWeek, toggleTask as apiToggle, DEMO_FAMILY, type WeekDayPlan } from '../api'
 import { mondayISO, shiftISO, shortDay } from '../lib/calendar'
@@ -9,29 +9,30 @@ import type { ScheduleItem } from '../types'
 
 const AUTHOR_LABEL: Record<ScheduleItem['author'], string> = { me: '내가', mom: '엄마가', dad: '아빠가' }
 
-/** 주간/월간 목표 — 진행 상태만 보여주는 읽기전용 행 (편집 가능) */
-function GoalRow({ goal, onEdit }: { goal: ScheduleItem; onEdit?: (g: ScheduleItem) => void }) {
+/** 주간/월간 목표 행 — 진행률(자동/수동) + 편집 + 하루계획 담기 */
+function GoalRow({ goal, onEdit, onCascade }: { goal: ScheduleItem; onEdit?: (g: ScheduleItem) => void; onCascade?: (g: ScheduleItem) => void }) {
   const done = goal.progress >= 100
-  const inner = (
-    <div className={`task readonly${done ? ' done' : ''}`}>
-      <span className={`cat ${goal.category}`} aria-hidden="true" />
-      <span className="check">
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </span>
-      <span className="tmid">
-        <span className="t">{goal.title}</span>
-        <span className="tmeta">
-          <span className={`who ${goal.author}`}>{AUTHOR_LABEL[goal.author]}</span>
-          <span className="time">{goal.progressLabel || `${goal.progress}%`}</span>
-        </span>
-      </span>
-      <span className="pts">+{goal.points} ⭐</span>
-    </div>
-  )
-  if (!onEdit) return inner
+  const label = goal.autoProgress ? `${goal.progress}% · 자동` : (goal.progressLabel || `${goal.progress}%`)
   return (
-    <div className="task-wrap">{inner}
-      <div className="task-side"><button type="button" className="edit-handle" aria-label="고치기" onClick={() => onEdit(goal)}>✎</button></div>
+    <div className="goal-item">
+      <div className={`task readonly${done ? ' done' : ''}`} style={{ marginBottom: 0 }}>
+        <span className={`cat ${goal.category}`} aria-hidden="true" />
+        <span className="check">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </span>
+        <span className="tmid">
+          <span className="t">{goal.title}</span>
+          <span className="tmeta">
+            <span className={`who ${goal.author}`}>{AUTHOR_LABEL[goal.author]}</span>
+            <span className="time">{label}</span>
+          </span>
+          <span className="goal-bar"><i style={{ width: `${goal.progress}%` }} /></span>
+        </span>
+        {onEdit && <button type="button" className="edit-handle" aria-label="고치기" onClick={() => onEdit(goal)}>✎</button>}
+      </div>
+      {onCascade && (
+        <button type="button" className="goal-cascade" onClick={() => onCascade(goal)}>＋ 이 목표를 하루계획에 담기</button>
+      )}
     </div>
   )
 }
@@ -41,7 +42,7 @@ export function WeekPanel({ onOpenDay }: { onOpenDay?: () => void }) {
   const { status, familyId } = useAuth()
   const [offset, setOffset] = useState(0)
   const [goalEditor, setGoalEditor] = useState<{ existing?: ScheduleItem } | null>(null)
-  const [dayEditor, setDayEditor] = useState<{ date: string } | null>(null)
+  const [dayEditor, setDayEditor] = useState<{ date: string; prefill?: Prefill } | null>(null)
   const [week, setWeek] = useState<{ today: string; days: WeekDayPlan[] } | null>(null)
 
   const fam = status === 'demo' ? DEMO_FAMILY : familyId ?? DEMO_FAMILY
@@ -77,7 +78,9 @@ export function WeekPanel({ onOpenDay }: { onOpenDay?: () => void }) {
       {/* 주간 목표 */}
       <div className="sechead"><h3>이번주 목표</h3><span className="count">{snapshot.weekGoals.length}개</span></div>
       {snapshot.weekGoals.map((g) => (
-        <GoalRow key={g.id} goal={g} onEdit={canManage ? (goal) => setGoalEditor({ existing: goal }) : undefined} />
+        <GoalRow key={g.id} goal={g}
+          onEdit={canManage ? (goal) => setGoalEditor({ existing: goal }) : undefined}
+          onCascade={canManage ? (goal) => setDayEditor({ date: today, prefill: { title: goal.title, category: goal.category, goalId: goal.id } }) : undefined} />
       ))}
       {snapshot.weekGoals.length === 0 && <p className="empty-hint">이번주 이루고 싶은 목표를 정해봐요! 🎯</p>}
       {canManage && (
@@ -116,7 +119,8 @@ export function WeekPanel({ onOpenDay }: { onOpenDay?: () => void }) {
           onClose={() => setGoalEditor(null)} onSaved={reload} />
       )}
       {dayEditor && canManage && (
-        <TaskEditor childId={childId} period="day" targetDate={dayEditor.date} defaultRecur="once"
+        <TaskEditor childId={childId} period="day" targetDate={dayEditor.date} prefill={dayEditor.prefill}
+          defaultRecur={dayEditor.prefill ? 'daily' : 'once'}
           onClose={() => setDayEditor(null)} onSaved={() => { load(); reload() }} />
       )}
     </div>

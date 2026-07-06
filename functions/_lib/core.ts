@@ -19,7 +19,23 @@ export interface TaskRow {
   id: string; title: string; category: string; author_id: string; child_id: string
   parent_kind: string | null; points: number; time_label: string | null
   progress: number; progress_label: string | null; done: number | null; approved: number | null
-  recur?: string | null
+  recur?: string | null; goal_id?: string | null
+}
+
+/** recur/시작일 기준으로 [aStart, aEnd] 범위에서 이 할일이 나타나는 날 수 */
+export function occurrencesInRange(recur: string, startISO: string, aStart: string, aEnd: string): number {
+  const from = startISO > aStart ? startISO : aStart
+  if (from > aEnd) return 0
+  if (recur === 'once') return startISO >= aStart && startISO <= aEnd ? 1 : 0
+  let count = 0
+  const d = new Date(from + 'T00:00:00Z')
+  const end = new Date(aEnd + 'T00:00:00Z')
+  while (d <= end) {
+    const dow = d.getUTCDay()
+    if (recur === 'daily' || (recur === 'weekdays' && dow >= 1 && dow <= 5)) count++
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return count
 }
 
 export function authorLabel(authorId: string, childId: string, parentKind: string | null): Author {

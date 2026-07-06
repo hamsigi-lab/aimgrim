@@ -27,6 +27,10 @@ export interface ScheduleItem {
   progressLabel: string
   /** 하루 할일 반복 규칙 */
   recur: Recur
+  /** 연결된 주/월 목표 id (cascade) */
+  goalId: string | null
+  /** 목표 진행률이 연결된 할일로 자동 계산됨 */
+  autoProgress?: boolean
 }
 
 /** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */
