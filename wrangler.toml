@@ -5,6 +5,10 @@ name = "aimgrim"
 compatibility_date = "2026-04-28"
 pages_build_output_dir = "dist"
 
+# 공개 환경변수 — Google OAuth 클라이언트 ID (백엔드 ID 토큰 검증용, 공개값)
+[vars]
+GOOGLE_CLIENT_ID = "1045289294896-816nnml0mfhrsciuhem5p045otkgi1ks.apps.googleusercontent.com"
+
 # D1 데이터베이스 바인딩 — Pages Functions에서 env.DB 로 접근
 [[d1_databases]]
 binding = "DB"
