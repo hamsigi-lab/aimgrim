@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Mascot } from '../components/Mascot'
 import { parentSignup, parentLogin, googleAuth, ApiError, type Me } from '../auth/api'
 import { GoogleButton, googleEnabled } from '../components/GoogleButton'
+import { googleMayBeBlocked } from '../lib/env'
 
 type Mode = 'signup' | 'login'
 
@@ -101,6 +102,12 @@ export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack:
 
         {googleEnabled && (
           <>
+            {googleMayBeBlocked() && (
+              <div className="inapp-note">
+                📢 지금은 <b>앱 속 브라우저</b>(카톡 등)예요. Google 로그인이 막힐 수 있어요.
+                <br />오른쪽 위 메뉴로 <b>Safari·Chrome에서 열거나</b>, 아래 <b>이메일</b>로 가입해 주세요.
+              </div>
+            )}
             <GoogleButton onCredential={handleGoogle} />
             <div className="or-div"><span>또는 이메일로</span></div>
           </>
