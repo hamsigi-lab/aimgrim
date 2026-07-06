@@ -81,3 +81,32 @@ export interface ChildOverview {
 export function getOverview(familyId: string): Promise<{ children: ChildOverview[] }> {
   return fetch(`/api/family/${familyId}/overview`).then((r) => json<{ children: ChildOverview[] }>(r))
 }
+
+// ---- 가족 캘린더 ----
+export type EventCategory = 'family' | 'school' | 'birthday' | 'trip' | 'etc'
+export interface FamilyEvent {
+  id: string
+  title: string
+  date: string
+  timeLabel: string
+  category: EventCategory
+  forMember: string | null
+  forName: string | null
+  note: string
+  authorId: string
+}
+export interface EventInput {
+  title: string
+  date: string
+  timeLabel?: string
+  category?: EventCategory
+  forMember?: string
+  note?: string
+}
+export function getEvents(familyId: string, month?: string): Promise<{ events: FamilyEvent[] }> {
+  const q = month ? `?month=${month}` : ''
+  return fetch(`/api/family/${familyId}/events${q}`).then((r) => json<{ events: FamilyEvent[] }>(r))
+}
+export const createEvent = (familyId: string, input: EventInput) => mutate<{ ok: boolean; id: string }>(`/api/family/${familyId}/events`, 'POST', input)
+export const updateEvent = (familyId: string, id: string, input: EventInput) => mutate(`/api/family/${familyId}/events/${id}`, 'PUT', input)
+export const deleteEvent = (familyId: string, id: string) => mutate(`/api/family/${familyId}/events/${id}`, 'DELETE')

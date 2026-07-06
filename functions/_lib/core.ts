@@ -57,6 +57,12 @@ export async function readSessionParent(db: D1Database, cookie: string | null): 
   return session && session.role === 'parent' ? session : null
 }
 
+/** 세션이 해당 가족 소속인지 (가족 공용 서비스용 — 캘린더 등) */
+export async function authFamily(db: D1Database, cookie: string | null, familyId: string): Promise<SessionRow | null> {
+  const session = await readSession(db, cookie)
+  return session && session.family_id === familyId ? session : null
+}
+
 /** 세션이 해당 자녀(가족 내)를 다룰 권한이 있는지. parent=가족 내 모든 자녀, child=본인만. */
 export async function authChild(
   db: D1Database, cookie: string | null, childId: string,

@@ -8,16 +8,18 @@ import { TodayPanel } from './panels/TodayPanel'
 import { WeekPanel } from './panels/WeekPanel'
 import { MonthPanel } from './panels/MonthPanel'
 import { PointsPanel } from './panels/PointsPanel'
+import { CalendarPanel } from './panels/CalendarPanel'
 import { MenuSheet } from './components/MenuSheet'
 import { Mascot } from './components/Mascot'
 
-type Tab = 'today' | 'week' | 'month' | 'points'
+type Tab = 'today' | 'week' | 'month' | 'points' | 'calendar'
 
 const NAV: { id: Tab; icon: string; label: string }[] = [
   { id: 'today', icon: '🏠', label: '오늘' },
   { id: 'week', icon: '📅', label: '이번주' },
   { id: 'month', icon: '🗓️', label: '이번달' },
   { id: 'points', icon: '⭐', label: '별점' },
+  { id: 'calendar', icon: '📆', label: '캘린더' },
 ]
 
 function Splash() {
@@ -107,6 +109,7 @@ function Shell() {
         {tab === 'week' && <WeekPanel />}
         {tab === 'month' && <MonthPanel />}
         {tab === 'points' && <PointsPanel celebrating={celebrating} />}
+        {tab === 'calendar' && <CalendarPanel />}
       </main>
 
       <nav className="nav" aria-label="화면 이동">
