@@ -7,7 +7,7 @@ import type { ScheduleItem } from '../types'
 
 const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
-export function MonthPanel() {
+export function MonthPanel({ onOpenDay }: { onOpenDay?: () => void }) {
   const { snapshot, childId, reload } = useApp()
   const { status } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
@@ -25,10 +25,10 @@ export function MonthPanel() {
         <div className="grid">
           {MONTH_WEEKDAYS.map((w) => <div key={w} className="wd">{w}</div>)}
           {month.cells.map((c, i) => (
-            <div key={i}
+            <button key={i} type="button" disabled={c.day === null} onClick={c.day ? onOpenDay : undefined}
               className={`cell${c.level === 3 ? ' lv3' : c.level === 2 ? ' lv2' : c.level === 1 ? ' lv1' : ''}${c.isToday ? ' today' : ''}${c.day === null ? ' mut' : ''}`}>
               {c.day ?? ''}
-            </div>
+            </button>
           ))}
         </div>
       </div>

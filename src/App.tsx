@@ -12,14 +12,21 @@ import { CalendarPanel } from './panels/CalendarPanel'
 import { MenuSheet } from './components/MenuSheet'
 import { Mascot } from './components/Mascot'
 
-type Tab = 'today' | 'week' | 'month' | 'points' | 'calendar'
+type BottomTab = 'plan' | 'points' | 'calendar'
+type PlanView = 'day' | 'week' | 'month'
 
-const NAV: { id: Tab; icon: string; label: string }[] = [
-  { id: 'today', icon: '🏠', label: '오늘' },
-  { id: 'week', icon: '📅', label: '이번주' },
-  { id: 'month', icon: '🗓️', label: '이번달' },
+// 하단 탭 = 구별되는 섹션(서비스)
+const NAV: { id: BottomTab; icon: string; label: string }[] = [
+  { id: 'plan', icon: '📋', label: '계획' },
   { id: 'points', icon: '⭐', label: '별점' },
   { id: 'calendar', icon: '📆', label: '캘린더' },
+]
+
+// 계획 안의 뷰 세그먼트 = 같은 계획의 줌 레벨
+const PLAN_SEG: { id: PlanView; label: string }[] = [
+  { id: 'day', label: '날짜' },
+  { id: 'week', label: '주' },
+  { id: 'month', label: '월' },
 ]
 
 function Splash() {
@@ -37,7 +44,8 @@ function Shell() {
   const { loading, error, snapshot, points, celebrateTick, lastGain, reload } = useApp()
   const { status, exitDemo, exitToHome, me } = useAuth()
   const isParent = status !== 'demo' && me?.member?.role === 'parent'
-  const [tab, setTab] = useState<Tab>('today')
+  const [tab, setTab] = useState<BottomTab>('plan')
+  const [planView, setPlanView] = useState<PlanView>('day')
   const [bump, setBump] = useState(false)
   const [floatKey, setFloatKey] = useState(0)
   const [celebrating, setCelebrating] = useState(false)
@@ -55,8 +63,12 @@ function Shell() {
     return () => { window.clearTimeout(t1); window.clearTimeout(t2) }
   }, [celebrateTick])
 
-  function go(next: Tab) {
+  function go(next: BottomTab) {
     setTab(next)
+    if (bodyRef.current) bodyRef.current.scrollTop = 0
+  }
+  function goPlan(view: PlanView) {
+    setPlanView(view)
     if (bodyRef.current) bodyRef.current.scrollTop = 0
   }
 
@@ -103,11 +115,20 @@ function Shell() {
         )}
       </header>
 
+      {tab === 'plan' && (
+        <div className="view-seg" role="tablist" aria-label="보기 전환">
+          {PLAN_SEG.map((s) => (
+            <button key={s.id} type="button" role="tab" aria-selected={planView === s.id}
+              className={planView === s.id ? 'on' : ''} onClick={() => goPlan(s.id)}>{s.label}</button>
+          ))}
+        </div>
+      )}
+
       <main className="body" ref={bodyRef}>
         {floatKey > 0 && <div className="float go" key={floatKey} aria-hidden="true">+{lastGain}</div>}
-        {tab === 'today' && <TodayPanel onGoToWeek={() => go('week')} />}
-        {tab === 'week' && <WeekPanel />}
-        {tab === 'month' && <MonthPanel />}
+        {tab === 'plan' && planView === 'day' && <TodayPanel onGoToWeek={() => goPlan('week')} />}
+        {tab === 'plan' && planView === 'week' && <WeekPanel onOpenDay={() => goPlan('day')} />}
+        {tab === 'plan' && planView === 'month' && <MonthPanel onOpenDay={() => goPlan('day')} />}
         {tab === 'points' && <PointsPanel celebrating={celebrating} />}
         {tab === 'calendar' && <CalendarPanel />}
       </main>

@@ -53,7 +53,7 @@ function GoalRow({ goal, onEdit }: { goal: ScheduleItem; onEdit?: (g: ScheduleIt
   )
 }
 
-export function WeekPanel() {
+export function WeekPanel({ onOpenDay }: { onOpenDay?: () => void }) {
   const { snapshot, childId, reload } = useApp()
   const { status } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
@@ -67,11 +67,11 @@ export function WeekPanel() {
 
       <div className="weekstrip">
         {week.days.map((d) => (
-          <div key={d.date} className={`day${d.isToday ? ' today' : ''}`}>
+          <button type="button" key={d.date} className={`day${d.isToday ? ' today' : ''}`} onClick={onOpenDay}>
             <div className="dn">{d.dayName}</div>
             <div className="dd">{d.dayNum}</div>
             <ProgressRing pct={d.completion} isToday={d.isToday} />
-          </div>
+          </button>
         ))}
       </div>
 

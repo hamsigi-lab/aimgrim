@@ -58,6 +58,12 @@ button { font-family: inherit; }
   }
 }
 
+/* ---------- Plan view segmented switcher ---------- */
+.view-seg { display: flex; gap: 4px; padding: 8px 18px 4px; background: var(--paper); flex: 0 0 auto; }
+.view-seg button { flex: 1; border: none; background: #F0EFE9; color: var(--ink-soft); border-radius: 11px; padding: 9px 0; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .18s, color .18s; }
+.view-seg button.on { background: var(--mint); color: #fff; box-shadow: 0 4px 10px -5px rgba(30,142,120,.7); }
+.view-seg button:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
+
 /* ---------- Top bar ---------- */
 .appbar {
   padding: calc(18px + env(safe-area-inset-top)) 20px 14px;
@@ -167,7 +173,7 @@ button { font-family: inherit; }
 
 /* ---------- Week strip ---------- */
 .weekstrip { display: flex; gap: 6px; margin: 4px 0 16px; }
-.day { flex: 1; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 9px 0; text-align: center; }
+.day { flex: 1; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 9px 0; text-align: center; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
 .day .dn { font-size: 10.5px; color: var(--ink-faint); font-weight: 700; }
 .day .dd { font-family: var(--round); font-size: 15px; font-weight: 800; margin-top: 3px; }
 .day .ring { margin: 6px auto 0; width: 22px; height: 22px; display: block; }
@@ -181,7 +187,8 @@ button { font-family: inherit; }
 .mtitle span { color: var(--ink-faint); font-size: 12px; font-weight: 700; }
 .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
 .grid .wd { font-size: 10px; color: var(--ink-faint); text-align: center; font-weight: 800; padding-bottom: 2px; }
-.cell { aspect-ratio: 1; border-radius: 9px; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); background: #F6FAF9; }
+.cell { aspect-ratio: 1; border-radius: 9px; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); background: #F6FAF9; border: none; font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cell.mut { cursor: default; }
 .cell.lv1 { background: #DFF4EE; }
 .cell.lv2 { background: #A7E4D4; color: var(--mint-deep); }
 .cell.lv3 { background: var(--mint); color: #fff; }
