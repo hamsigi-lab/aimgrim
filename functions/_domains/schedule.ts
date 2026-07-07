@@ -313,8 +313,8 @@ scheduleRoutes.post('/tasks', async (c) => {
 scheduleRoutes.put('/tasks/:id', async (c) => {
   const db = c.env.DB
   const taskId = c.req.param('id')
-  const task = await db.prepare('SELECT id, family_id, child_id, author_id, period FROM tasks WHERE id = ?')
-    .bind(taskId).first<{ id: string; family_id: string; child_id: string; author_id: string; period: string }>()
+  const task = await db.prepare('SELECT id, family_id, child_id, author_id, period, title, category FROM tasks WHERE id = ?')
+    .bind(taskId).first<{ id: string; family_id: string; child_id: string; author_id: string; period: string; title: string; category: string }>()
   if (!task) return c.json({ error: 'task_not_found' }, 404)
   const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
@@ -334,6 +334,13 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   await db.prepare(
     'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ?, recur = ?, recur_days = ?, goal_id = ? WHERE id = ?',
   ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, taskId).run()
+
+  // 목표를 수정하면, 이 목표로 '담긴' 하루 할일 중 아직 목표 이름 그대로인 것들의 제목/종류도 같이 반영
+  // (직접 다른 이름으로 고친 세부 할일은 건드리지 않는다)
+  if (task.period !== 'day' && (title !== task.title || category !== task.category)) {
+    await db.prepare("UPDATE tasks SET title = ?, category = ? WHERE goal_id = ? AND period = 'day' AND title = ?")
+      .bind(title, category, taskId, task.title).run()
+  }
 
   return c.json({ ok: true })
 })
