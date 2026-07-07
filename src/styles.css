@@ -180,9 +180,13 @@ button { font-family: inherit; }
 .day.today { background: var(--mint); border-color: var(--mint); }
 .day.today .dn, .day.today .dd { color: #fff; }
 
-/* ---------- Goal item (진행바 + 담기) ---------- */
-.goal-item { margin-bottom: 12px; }
-.goal-item .task .tmid { min-width: 0; }
+/* ---------- Goal item (진행바 + 우측 아이콘 액션) ---------- */
+.goal-card { align-items: center; }
+.goal-icons { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding-left: 4px; }
+.gi-btn { width: 34px; height: 34px; flex: 0 0 34px; border: 1.5px solid var(--line); background: #fff; border-radius: 10px; font-size: 15px; cursor: pointer; color: var(--ink-soft); font-family: inherit; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.gi-btn:active { transform: scale(.94); }
+.gi-btn.cascade { border-color: var(--grape); color: #6A55C9; background: var(--grape-wash); font-weight: 900; }
+.gi-btn.del { border-color: #F0D5CF; }
 .goal-bar { display: block; height: 6px; background: var(--line); border-radius: 100px; margin-top: 7px; overflow: hidden; }
 .goal-bar i { display: block; height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); transition: width .5s ease; }
 .goal-cascade { width: 100%; background: none; border: 1.5px dashed var(--grape); color: #6A55C9; border-radius: 12px; padding: 8px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; -webkit-tap-highlight-color: transparent; }
