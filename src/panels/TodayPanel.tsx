@@ -5,11 +5,12 @@ import { TaskRow } from '../components/TaskRow'
 import { TaskEditor } from '../components/TaskEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
+import { GoalChips } from '../components/GoalChips'
 import { approveTask, toggleTask as apiToggle, fetchDayTasks, DEMO_FAMILY } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
-export function TodayPanel({ onGoToWeek }: { onGoToWeek?: () => void }) {
+export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
   const { snapshot, childId, toggleTask, reload } = useApp()
   const { status, me, familyId } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
@@ -40,7 +41,6 @@ export function TodayPanel({ onGoToWeek }: { onGoToWeek?: () => void }) {
   const canManage = status !== 'demo'
   const isParent = canManage && me?.member?.role === 'parent'
   const isChild = !isParent
-  const weekGoals = snapshot.weekGoals
   const header = dateHeader(date, today)
 
   const tasks = isToday ? snapshot.todayTasks : (otherTasks ?? [])
@@ -77,20 +77,7 @@ export function TodayPanel({ onGoToWeek }: { onGoToWeek?: () => void }) {
         {isToday && snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
       </div>
 
-      {isToday && weekGoals.length > 0 && (
-        <button type="button" className="wg-mini" onClick={onGoToWeek}>
-          <span className="wg-lab">🎯 이번주 목표 {weekGoals.length}</span>
-          <span className="wg-strip">
-            {weekGoals.map((g) => (
-              <span className="wg-pill" key={g.id}>
-                <span className={`wg-dot ${g.category}`} aria-hidden="true" />
-                <span className="wg-name">{g.title}</span>
-                <span className="wg-pct">{g.progress}%</span>
-              </span>
-            ))}
-          </span>
-        </button>
-      )}
+      {isToday && <GoalChips label="이번주 목표" goals={snapshot.weekGoals} onOpen={onGoToGoals} />}
 
       {isParent && isToday && (
         <div className="approve">

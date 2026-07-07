@@ -188,7 +188,24 @@ button { font-family: inherit; }
 .goal-cascade { width: 100%; background: none; border: 1.5px dashed var(--grape); color: #6A55C9; border-radius: 12px; padding: 8px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; -webkit-tap-highlight-color: transparent; }
 .goal-cascade:active { transform: scale(.99); }
 
-/* ---------- Week view (날짜별 계획) ---------- */
+/* ---------- Goals tab ---------- */
+.goals-intro { font-size: 13.5px; color: var(--ink-soft); font-weight: 600; line-height: 1.6; margin: 4px 2px 16px; }
+.wg-more { color: var(--mint-deep); font-weight: 800; }
+
+/* ---------- Week view: 요일 스트립 + 선택한 날 ---------- */
+.wk-strip { display: flex; gap: 5px; }
+.wk-cell { flex: 1; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 8px 0 7px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; min-width: 0; }
+.wk-cell.today { border-color: var(--mint); }
+.wk-cell.sel { background: var(--mint); border-color: var(--mint); }
+.wk-cw { font-size: 10.5px; font-weight: 800; color: var(--ink-faint); }
+.wk-cell.sel .wk-cw { color: rgba(255,255,255,.85); }
+.wk-cd { font-family: var(--round); font-size: 15px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.wk-cell.sel .wk-cd { color: #fff; }
+.wk-badge { font-size: 9.5px; font-weight: 800; color: var(--ink-faint); background: #F0EFE9; border-radius: 100px; padding: 1px 6px; min-height: 14px; }
+.wk-badge.full { background: var(--good-wash); color: var(--good); }
+.wk-cell.sel .wk-badge { background: rgba(255,255,255,.25); color: #fff; }
+
+/* ---------- (구) Week view 날짜별 카드 ---------- */
 .wk-days { display: flex; flex-direction: column; gap: 12px; }
 .wk-day { background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 12px 13px; }
 .wk-day.today { border-color: var(--mint); box-shadow: 0 8px 18px -14px rgba(30,142,120,.5); }
