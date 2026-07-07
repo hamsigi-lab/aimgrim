@@ -27,7 +27,7 @@ authRoutes.post('/auth/google', async (c) => {
   const clientId = c.env.GOOGLE_CLIENT_ID
   if (!clientId) return c.json({ error: 'google_not_configured' }, 500)
 
-  const body = await c.req.json<{ credential?: string; familyName?: string; parentKind?: string }>()
+  const body = await c.req.json<{ credential?: string; familyName?: string; parentKind?: string; inviteCode?: string }>()
   const claims = await verifyGoogleIdToken(body.credential ?? '', clientId)
   if (!claims) return c.json({ error: 'invalid_token' }, 401)
 
@@ -50,10 +50,26 @@ authRoutes.post('/auth/google', async (c) => {
     return c.json(await loadMe(db, session))
   }
 
-  // 신규 → 가족 이름 필요
-  const familyName = (body.familyName ?? '').trim()
-  if (!familyName) return c.json({ needsFamily: true, name: claims.name ?? '', email: claims.email })
+  // 신규 사용자
   const parentKind = body.parentKind === 'dad' ? 'dad' : 'mom'
+  const inviteCode2 = (body.inviteCode ?? '').trim().toUpperCase()
+  const familyName = (body.familyName ?? '').trim()
+
+  // 초대코드로 기존 가족 합류
+  if (inviteCode2) {
+    const family = await db.prepare('SELECT id FROM families WHERE invite_code = ?').bind(inviteCode2).first<{ id: string }>()
+    if (!family) return c.json({ error: 'invalid_code' }, 404)
+    const now = Date.now()
+    const memberId = randomId('mem')
+    await db.prepare('INSERT INTO members (id, family_id, role, parent_kind, display_name, email, google_sub, points, created_at) VALUES (?, ?, \'parent\', ?, ?, ?, ?, 0, ?)')
+      .bind(memberId, family.id, parentKind, claims.name?.trim() || '부모', claims.email, claims.sub, now).run()
+    const token = await createSession(db, { id: memberId, family_id: family.id, role: 'parent' })
+    c.header('Set-Cookie', sessionCookie(token))
+    return c.json(await loadMe(db, { token, member_id: memberId, family_id: family.id, role: 'parent', expires_at: now }))
+  }
+
+  // 가족 이름이 없으면 프론트에 한 단계 더 요청(새 가족 이름 or 초대코드)
+  if (!familyName) return c.json({ needsFamily: true, name: claims.name ?? '', email: claims.email })
 
   const now = Date.now()
   const familyId = randomId('fam')
@@ -125,6 +141,38 @@ authRoutes.post('/auth/parent/login', async (c) => {
   const token = await createSession(db, { id: member.id, family_id: member.family_id, role: 'parent' })
   c.header('Set-Cookie', sessionCookie(token))
   const session: SessionRow = { token, member_id: member.id, family_id: member.family_id, role: 'parent', expires_at: Date.now() }
+  return c.json(await loadMe(db, session))
+})
+
+// 두 번째 부모가 초대코드로 기존 가족에 합류 (엄마·아빠가 한 가족 공유)
+authRoutes.post('/auth/parent/join', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{ email?: string; password?: string; name?: string; parentKind?: string; inviteCode?: string }>()
+  const email = (body.email ?? '').trim().toLowerCase()
+  const password = body.password ?? ''
+  const name = (body.name ?? '').trim()
+  const parentKind = body.parentKind === 'dad' ? 'dad' : 'mom'
+  const code = (body.inviteCode ?? '').trim().toUpperCase()
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: 'invalid_email' }, 400)
+  if (password.length < 6) return c.json({ error: 'weak_password' }, 400)
+  if (!name) return c.json({ error: 'missing_fields' }, 400)
+
+  const family = await db.prepare('SELECT id FROM families WHERE invite_code = ?').bind(code).first<{ id: string }>()
+  if (!family) return c.json({ error: 'invalid_code' }, 404)
+  const existing = await db.prepare('SELECT id FROM members WHERE email = ?').bind(email).first()
+  if (existing) return c.json({ error: 'email_taken' }, 409)
+
+  const now = Date.now()
+  const memberId = randomId('mem')
+  const pwHash = await hashPassword(password)
+  await db.prepare(
+    'INSERT INTO members (id, family_id, role, parent_kind, display_name, email, password_hash, points, created_at) VALUES (?, ?, \'parent\', ?, ?, ?, ?, 0, ?)',
+  ).bind(memberId, family.id, parentKind, name, email, pwHash, now).run()
+
+  const token = await createSession(db, { id: memberId, family_id: family.id, role: 'parent' })
+  c.header('Set-Cookie', sessionCookie(token))
+  const session: SessionRow = { token, member_id: memberId, family_id: family.id, role: 'parent', expires_at: now }
   return c.json(await loadMe(db, session))
 })
 

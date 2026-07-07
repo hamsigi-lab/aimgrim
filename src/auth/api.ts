@@ -41,13 +41,23 @@ export function parentLogin(input: { email: string; password: string }): Promise
   return post<Me>('/api/auth/parent/login', input)
 }
 
+/** 두 번째 부모가 초대코드로 기존 가족에 합류 */
+export function parentJoin(input: {
+  email: string; password: string; name: string; parentKind: 'mom' | 'dad'; inviteCode: string
+}): Promise<Me> {
+  return post<Me>('/api/auth/parent/join', input)
+}
+
 export interface GoogleAuthResult extends Me {
   needsFamily?: boolean
   name?: string
   email?: string
 }
-export function googleAuth(credential: string, familyName?: string, parentKind?: 'mom' | 'dad'): Promise<GoogleAuthResult> {
-  return post<GoogleAuthResult>('/api/auth/google', { credential, familyName, parentKind })
+export function googleAuth(
+  credential: string,
+  opts?: { familyName?: string; parentKind?: 'mom' | 'dad'; inviteCode?: string },
+): Promise<GoogleAuthResult> {
+  return post<GoogleAuthResult>('/api/auth/google', { credential, ...opts })
 }
 
 export function addChild(input: {
