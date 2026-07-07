@@ -66,6 +66,11 @@ export function addChild(input: {
   return post<Me>('/api/children', input)
 }
 
+/** 이미 로그인한 부모가 초대코드로 배우자 가족에 합류(이동) */
+export function switchFamily(inviteCode: string): Promise<Me> {
+  return post<Me>('/api/auth/family/switch', { inviteCode })
+}
+
 export function lookupInvite(code: string): Promise<JoinInfo> {
   return fetch(`/api/join/${encodeURIComponent(code)}`).then(async (r) => {
     if (!r.ok) throw new ApiError('invalid_code', r.status)

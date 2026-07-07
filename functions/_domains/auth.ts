@@ -176,6 +176,38 @@ authRoutes.post('/auth/parent/join', async (c) => {
   return c.json(await loadMe(db, session))
 })
 
+// 이미 로그인한 부모가 초대코드로 다른(배우자) 가족에 합류 — 예전에 혼자 만든 빈 가족에서 이동
+authRoutes.post('/auth/family/switch', async (c) => {
+  const db = c.env.DB
+  const session = await requireSession(db, c.req.header('Cookie') ?? null)
+  if (!session || session.role !== 'parent') return c.json({ error: 'unauthorized' }, 401)
+  const body = await c.req.json<{ inviteCode?: string }>()
+  const code = (body.inviteCode ?? '').trim().toUpperCase()
+
+  const target = await db.prepare('SELECT id FROM families WHERE invite_code = ?').bind(code).first<{ id: string }>()
+  if (!target) return c.json({ error: 'invalid_code' }, 404)
+  const oldFamily = session.family_id
+  if (target.id === oldFamily) return c.json(await loadMe(db, session)) // 이미 그 가족
+
+  await db.batch([
+    db.prepare('UPDATE members SET family_id = ? WHERE id = ?').bind(target.id, session.member_id),
+    db.prepare('UPDATE sessions SET family_id = ? WHERE member_id = ?').bind(target.id, session.member_id),
+  ])
+
+  // 떠난 가족에 남은 구성원이 없으면 정리(빈 가족 + 그 가족 이벤트)
+  const remain = await db.prepare('SELECT COUNT(*) AS n FROM members WHERE family_id = ?').bind(oldFamily).first<{ n: number }>()
+  if ((remain?.n ?? 0) === 0) {
+    await db.batch([
+      db.prepare('DELETE FROM events WHERE family_id = ?').bind(oldFamily),
+      db.prepare('DELETE FROM sessions WHERE family_id = ?').bind(oldFamily),
+      db.prepare('DELETE FROM families WHERE id = ?').bind(oldFamily),
+    ])
+  }
+
+  const next: SessionRow = { ...session, family_id: target.id }
+  return c.json(await loadMe(db, next))
+})
+
 authRoutes.post('/children', async (c) => {
   const db = c.env.DB
   const session = await requireSession(db, c.req.header('Cookie') ?? null)
