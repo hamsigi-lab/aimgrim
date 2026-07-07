@@ -187,6 +187,11 @@ button { font-family: inherit; }
 .goal-bar i { display: block; height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); transition: width .5s ease; }
 .goal-cascade { width: 100%; background: none; border: 1.5px dashed var(--grape); color: #6A55C9; border-radius: 12px; padding: 8px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; -webkit-tap-highlight-color: transparent; }
 .goal-cascade:active { transform: scale(.99); }
+.goal-actions { display: flex; gap: 6px; margin-top: 7px; }
+.ga-btn { flex: 1; background: #fff; border: 1.5px solid var(--line); border-radius: 10px; padding: 7px 4px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; color: var(--ink-soft); white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+.ga-btn:active { transform: scale(.98); }
+.ga-btn.cascade { flex: 1.5; border-color: var(--grape); color: #6A55C9; background: var(--grape-wash); }
+.ga-btn.del { color: var(--crit); }
 
 /* ---------- Goals tab ---------- */
 .goals-intro { font-size: 13.5px; color: var(--ink-soft); font-weight: 600; line-height: 1.6; margin: 4px 2px 16px; }

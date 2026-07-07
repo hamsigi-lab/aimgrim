@@ -3,6 +3,7 @@ import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { GoalRow } from '../components/GoalRow'
 import { TaskEditor, type Prefill } from '../components/TaskEditor'
+import { deleteTask } from '../api'
 import type { ScheduleItem } from '../types'
 
 /** 목표 탭 — 이번주·이달의 목표를 설정/관리하고 하루계획에 담는 곳 */
@@ -21,6 +22,9 @@ export function GoalsPanel() {
   const onCascade = canManage
     ? (g: ScheduleItem) => setCascade({ title: g.title, category: g.category, goalId: g.id })
     : undefined
+  const onDelete = canManage
+    ? async (g: ScheduleItem) => { if (window.confirm(`'${g.title}' 목표를 삭제할까요?`)) { await deleteTask(g.id); reload() } }
+    : undefined
 
   return (
     <div className="panel">
@@ -30,7 +34,7 @@ export function GoalsPanel() {
 
       <div className="sechead"><h3>이번주 목표</h3><span className="count">{week.length}개</span></div>
       {week.map((g) => (
-        <GoalRow key={g.id} goal={g} onEdit={canManage ? (goal) => setEditor({ period: 'week', existing: goal }) : undefined} onCascade={onCascade} />
+        <GoalRow key={g.id} goal={g} onEdit={canManage ? (goal) => setEditor({ period: 'week', existing: goal }) : undefined} onCascade={onCascade} onDelete={onDelete} />
       ))}
       {week.length === 0 && <p className="empty-hint">이번주 이루고 싶은 목표를 정해봐요! 🎯</p>}
       {canManage && (
@@ -39,7 +43,7 @@ export function GoalsPanel() {
 
       <div className="sechead" style={{ marginTop: 20 }}><h3>이달의 목표</h3></div>
       {month ? (
-        <GoalRow goal={month} onEdit={canManage ? (goal) => setEditor({ period: 'month', existing: goal }) : undefined} onCascade={onCascade} />
+        <GoalRow goal={month} onEdit={canManage ? (goal) => setEditor({ period: 'month', existing: goal }) : undefined} onCascade={onCascade} onDelete={onDelete} />
       ) : (
         <>
           <p className="empty-hint">이번달 이루고 싶은 큰 목표를 정해봐요! 📚</p>
