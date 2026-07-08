@@ -180,15 +180,37 @@ button { font-family: inherit; }
 .day.today { background: var(--mint); border-color: var(--mint); }
 .day.today .dn, .day.today .dd { color: #fff; }
 
-/* ---------- Goal item (진행바 + 우측 아이콘 액션) ---------- */
-.goal-card { align-items: center; }
-.goal-icons { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding-left: 4px; }
-.gi-btn { width: 34px; height: 34px; flex: 0 0 34px; border: 1.5px solid var(--line); background: #fff; border-radius: 10px; font-size: 15px; cursor: pointer; color: var(--ink-soft); font-family: inherit; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+/* ---------- Goal item (그리미 여정 + 우측 아이콘 액션) ---------- */
+.goal-item { background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 13px 14px 12px; margin-bottom: 12px; }
+.goal-head { display: flex; align-items: center; gap: 12px; }
+.goal-head .cat { width: 4px; align-self: stretch; border-radius: 100px; flex: 0 0 4px; }
+.goal-head .tmid { flex: 1; min-width: 0; }
+.goal-head .t { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+.auto-tag { font-size: 10px; font-weight: 800; color: var(--mint-deep); background: var(--mint-wash); padding: 1px 7px; border-radius: 100px; }
+.goal-icons { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.gi-btn { width: 32px; height: 32px; flex: 0 0 32px; border: 1.5px solid var(--line); background: #fff; border-radius: 10px; font-size: 14px; cursor: pointer; color: var(--ink-soft); font-family: inherit; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
 .gi-btn:active { transform: scale(.94); }
 .gi-btn.cascade { border-color: var(--grape); color: #6A55C9; background: var(--grape-wash); font-weight: 900; }
 .gi-btn.del { border-color: #F0D5CF; }
-.goal-bar { display: block; height: 6px; background: var(--line); border-radius: 100px; margin-top: 7px; overflow: hidden; }
-.goal-bar i { display: block; height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); transition: width .5s ease; }
+
+/* ---------- Grimi Journey (목표=목적지, 마스코트가 걷는 경로) ---------- */
+.journey { margin-top: 14px; }
+.jn-track { position: relative; height: 44px; margin: 0 6px; }
+.jn-track::before { content: ''; position: absolute; left: 0; right: 0; top: 30px; height: 7px; background: var(--line); border-radius: 100px; }
+.jn-fill { position: absolute; left: 0; top: 30px; height: 7px; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); border-radius: 100px; transition: width .6s cubic-bezier(.3,1,.5,1); max-width: 100%; }
+.jn-node { position: absolute; top: 30px; width: 11px; height: 11px; margin-left: -5.5px; transform: translateY(-2px); background: #fff; border: 2.5px solid var(--line-strong, #D3D2C9); border-radius: 50%; }
+.jn-node.passed { border-color: var(--mint-deep); background: var(--mint); }
+.jn-goal { position: absolute; right: -6px; top: 22px; font-size: 20px; filter: grayscale(.4); }
+.jn-goal.reached { filter: none; animation: pop .5s cubic-bezier(.3,1.6,.5,1); }
+.jn-grimi { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; transition: left .6s cubic-bezier(.3,1,.5,1); }
+.jn-tier { font-size: 12px; line-height: 1; margin-bottom: -2px; }
+.jn-grimi svg { filter: drop-shadow(0 3px 4px rgba(31,80,68,.25)); }
+.journey.done .jn-grimi { animation: jhop .7s cubic-bezier(.3,1.5,.5,1); }
+@keyframes jhop { 0%,100% { transform: translateX(-50%) translateY(0); } 45% { transform: translateX(-50%) translateY(-8px); } }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.jn-caption { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding: 0 2px; }
+.jn-pct { font-family: var(--round); font-size: 16px; font-weight: 800; color: var(--mint-deep); font-variant-numeric: tabular-nums; }
+.jn-tierlabel { font-size: 12px; font-weight: 700; color: var(--ink-faint); }
 .goal-cascade { width: 100%; background: none; border: 1.5px dashed var(--grape); color: #6A55C9; border-radius: 12px; padding: 8px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; -webkit-tap-highlight-color: transparent; }
 .goal-cascade:active { transform: scale(.99); }
 .goal-actions { display: flex; gap: 6px; margin-top: 7px; }
