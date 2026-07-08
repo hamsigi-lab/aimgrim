@@ -17,10 +17,12 @@ export function fetchSnapshot(
   return fetch(`/api/family/${familyId}/snapshot?childId=${childId}`).then((r) => json<Snapshot>(r))
 }
 
+export interface Surprise { points: number; message: string }
 export interface ToggleResult {
   done: boolean
   points: number
   gained: number
+  surprise?: Surprise | null
 }
 
 export function toggleTask(taskId: string, childId = DEMO_CHILD, date?: string): Promise<ToggleResult> {

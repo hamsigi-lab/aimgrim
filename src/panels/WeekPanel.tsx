@@ -9,7 +9,7 @@ import { mondayISO, shiftISO, shortDay } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
 export function WeekPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
-  const { snapshot, childId, reload } = useApp()
+  const { snapshot, childId, reload, showSurprise } = useApp()
   const { status, familyId } = useAuth()
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
@@ -45,7 +45,7 @@ export function WeekPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
   async function toggle(id: string) {
     if (isFuture) return
     setWeek((w) => w ? { ...w, days: w.days.map((d) => d.date === selDate ? { ...d, tasks: d.tasks.map((t) => t.id === id ? { ...t, done: !t.done } : t) } : d) } : w)
-    try { await apiToggle(id, childId, selDate) } catch { /* 무시 */ }
+    try { const res = await apiToggle(id, childId, selDate); if (res.surprise) showSurprise(res.surprise) } catch { /* 무시 */ }
     load(); reload()
   }
 

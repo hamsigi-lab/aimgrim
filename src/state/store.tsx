@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from 'react'
 import type { Snapshot } from '../types'
-import { fetchSnapshot, toggleTask as apiToggle } from '../api'
+import { fetchSnapshot, toggleTask as apiToggle, type Surprise } from '../api'
 
 interface AppState {
   childId: string
@@ -18,6 +18,10 @@ interface AppState {
   todayTotal: number
   toggleTask: (id: string) => void
   reload: () => void
+  /** 깜짝 상자 (도착 시 열기) */
+  surprise: Surprise | null
+  showSurprise: (s: Surprise) => void
+  clearSurprise: () => void
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -31,6 +35,7 @@ export function AppProvider(
   const [error, setError] = useState<string | null>(null)
   const [lastGain, setLastGain] = useState(0)
   const [celebrateTick, setCelebrateTick] = useState(0)
+  const [surprise, setSurprise] = useState<Surprise | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -59,7 +64,7 @@ export function AppProvider(
       }
       // 서버 반영 (실패 시 되돌리기)
       apiToggle(id, childId)
-        .then((res) => setPoints(res.points))
+        .then((res) => { setPoints(res.points); if (res.surprise) setSurprise(res.surprise) })
         .catch(() => {
           setPoints((p) => (nextDone ? Math.max(0, p - task.points) : p + task.points))
           setSnapshot((s) =>
@@ -77,9 +82,12 @@ export function AppProvider(
   const doneCount = snapshot?.todayTasks.filter((t) => t.done).length ?? 0
   const todayTotal = snapshot?.todayTasks.length ?? 0
 
+  const showSurprise = useCallback((s: Surprise) => setSurprise(s), [])
+  const clearSurprise = useCallback(() => setSurprise(null), [])
+
   const value = useMemo<AppState>(
-    () => ({ childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load }),
-    [childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load],
+    () => ({ childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load, surprise, showSurprise, clearSurprise }),
+    [childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load, surprise, showSurprise, clearSurprise],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

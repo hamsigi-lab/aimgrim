@@ -11,6 +11,7 @@ import { MonthPanel } from './panels/MonthPanel'
 import { PointsPanel } from './panels/PointsPanel'
 import { CalendarPanel } from './panels/CalendarPanel'
 import { MenuSheet } from './components/MenuSheet'
+import { SurpriseBox } from './components/SurpriseBox'
 import { Mascot } from './components/Mascot'
 
 type BottomTab = 'goals' | 'plan' | 'points' | 'calendar'
@@ -43,7 +44,7 @@ function Splash() {
 }
 
 function Shell() {
-  const { loading, error, snapshot, points, celebrateTick, lastGain, reload } = useApp()
+  const { loading, error, snapshot, points, celebrateTick, lastGain, reload, surprise, clearSurprise } = useApp()
   const { status, exitDemo, exitToHome, me } = useAuth()
   const isParent = status !== 'demo' && me?.member?.role === 'parent'
   const [tab, setTab] = useState<BottomTab>('plan')
@@ -147,6 +148,7 @@ function Shell() {
       </nav>
 
       {menuOpen && <MenuSheet onClose={() => setMenuOpen(false)} />}
+      {surprise && <SurpriseBox surprise={surprise} onClose={clearSurprise} />}
     </div>
   )
 }

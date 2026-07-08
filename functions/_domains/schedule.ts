@@ -261,9 +261,59 @@ scheduleRoutes.post('/tasks/:taskId/toggle', async (c) => {
       .bind(randomId('pl'), task.child_id, delta, nextDone ? 'task_done' : 'task_undone', taskId, task.title, now),
   ])
 
-  const updated = await db.prepare('SELECT points FROM members WHERE id = ?').bind(task.child_id).first<{ points: number }>()
-  return c.json({ done: nextDone, points: updated?.points ?? 0, gained: nextDone ? task.points : 0 })
+  let points = (await db.prepare('SELECT points FROM members WHERE id = ?').bind(task.child_id).first<{ points: number }>())?.points ?? 0
+
+  // 깜짝 상자: 오늘 계획을 '모두' 해낸 순간 가끔(하루 1회, 점차 줄임) 상징 보너스
+  let surprise: { points: number; message: string } | null = null
+  if (nextDone && date === today) {
+    surprise = await maybeSurprise(db, task.child_id, today, now)
+    if (surprise) points += surprise.points
+  }
+
+  return c.json({ done: nextDone, points, gained: nextDone ? task.points : 0, surprise })
 })
+
+const SURPRISE_MSGS = [
+  '오늘 계획을 다 해냈어! 깜짝 선물이야 🎁',
+  '스스로 끝까지 해낸 너, 정말 멋져 ✨',
+  '와, 오늘도 완주! 작은 선물 받아 💝',
+  '해낸 하루엔 깜짝 보너스 🌟',
+]
+
+// 오늘 모든 하루 할일을 완료했으면 확률적으로(점감) 깜짝 보너스 지급
+async function maybeSurprise(db: D1Database, childId: string, today: string, now: number): Promise<{ points: number; message: string } | null> {
+  const isWeekday = isWeekdayOf(today)
+  const agg = await db.prepare(`
+    SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN c.done = 1 THEN 1 ELSE 0 END),0) AS done
+    FROM tasks t LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+    WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}`)
+    .bind(today, childId, ...dayRecurBinds(today, isWeekday, dayBitOf(today))).first<{ total: number; done: number }>()
+  if (!agg || agg.total === 0 || agg.done < agg.total) return null // 전부 완료 아니면 없음
+
+  // 하루 1회 (이미 오늘 받았으면 없음)
+  const already = await db.prepare('SELECT id FROM surprises WHERE child_id = ? AND the_date = ?').bind(childId, today).first()
+  if (already) return null
+
+  // 점감: 받은 횟수가 늘수록 확률↓ (초반 60% → 하한 15%)
+  const cnt = (await db.prepare('SELECT COUNT(*) AS n FROM surprises WHERE child_id = ?').bind(childId).first<{ n: number }>())?.n ?? 0
+  const p = Math.max(0.15, 0.6 - 0.03 * cnt)
+  if (Math.random() >= p) return null
+
+  const bonus = 5 + Math.floor(Math.random() * 3) * 5 // 5/10/15
+  const message = SURPRISE_MSGS[Math.floor(Math.random() * SURPRISE_MSGS.length)]
+  try {
+    await db.batch([
+      db.prepare('INSERT INTO surprises (id, child_id, the_date, points, message, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(randomId('sp'), childId, today, bonus, message, now),
+      db.prepare('UPDATE members SET points = points + ? WHERE id = ?').bind(bonus, childId),
+      db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+        .bind(randomId('pl'), childId, bonus, 'surprise', '깜짝 선물', now),
+    ])
+  } catch {
+    return null // 동시성 등으로 UNIQUE 충돌 시 조용히 스킵
+  }
+  return { points: bonus, message }
+}
 
 // 일정(할일/목표) 생성
 scheduleRoutes.post('/tasks', async (c) => {

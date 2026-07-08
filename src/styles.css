@@ -524,6 +524,20 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .ph-meta { font-size: 12px; color: var(--ink-faint); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ph-go { font-size: 24px; color: var(--ink-faint); font-weight: 400; }
 
+/* ---------- Surprise box (깜짝 상자) ---------- */
+.sb-backdrop { align-items: center; justify-content: center; }
+.sb-card { background: var(--paper); border-radius: 26px; padding: 30px 26px 24px; width: min(320px, 86%); text-align: center; box-shadow: 0 30px 70px -24px rgba(31,80,68,.55); animation: sbin .3s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes sbin { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.sb-lab { font-size: 14px; font-weight: 800; color: var(--mint-deep); margin-bottom: 14px; }
+.sb-box { font-size: 84px; line-height: 1; background: none; border: none; cursor: pointer; padding: 8px; animation: sbwiggle 1.2s ease-in-out infinite; -webkit-tap-highlight-color: transparent; }
+.sb-box:active { transform: scale(.92); }
+@keyframes sbwiggle { 0%,100% { transform: rotate(-5deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-6px); } }
+.sb-hint { font-size: 12.5px; color: var(--ink-faint); font-weight: 700; margin-top: 8px; }
+.sb-mascot { width: 104px; height: 104px; margin: 0 auto 6px; animation: jhop .7s cubic-bezier(.3,1.5,.5,1); }
+.sb-mascot svg { width: 100%; height: 100%; }
+.sb-reward { font-family: var(--round); font-size: 34px; font-weight: 800; color: var(--gold); margin: 2px 0 6px; }
+.sb-msg { font-size: 14px; font-weight: 700; color: var(--ink-soft); line-height: 1.5; margin-bottom: 18px; }
+
 /* ---------- Demo banner ---------- */
 .demobar { display: flex; align-items: center; gap: 10px; background: var(--grape-wash); border-bottom: 1.5px solid #E2D9FA; padding: 9px 16px calc(9px); font-size: 12.5px; font-weight: 700; color: #6A55C9; }
 .demobar .db-txt { flex: 1; }
