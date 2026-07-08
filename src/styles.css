@@ -3,8 +3,8 @@
   --bg2: #F3F0FB;
   --paper: #FCFEFD;
   --ink: #243230;
-  --ink-soft: #6A7B76;
-  --ink-faint: #9DABA6;
+  --ink-soft: #566159;
+  --ink-faint: #737F79; /* 보조 텍스트 — 가독성(WCAG) 위해 진하게, 톤은 소프트 유지 */
   --line: #E4EEEA;
   --mint: #2FB79A;
   --mint-deep: #1E8E78;
