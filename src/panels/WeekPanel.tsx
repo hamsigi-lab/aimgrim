@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { TaskEditor } from '../components/TaskEditor'
-import { TaskRow } from '../components/TaskRow'
+import { PlanList } from '../components/PlanList'
 import { GoalChips } from '../components/GoalChips'
 import { fetchWeek, toggleTask as apiToggle, DEMO_FAMILY, type WeekDayPlan } from '../api'
 import { mondayISO, shiftISO, shortDay } from '../lib/calendar'
@@ -84,10 +84,9 @@ export function WeekPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
         <span className="count">{tasks.filter((t) => t.done).length} / {tasks.length} 완료</span>
       </div>
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 4 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
-      {tasks.map((t) => (
-        <TaskRow key={t.id} task={t} onToggle={!isFuture ? toggle : undefined}
-          onEdit={canManage ? (task) => setDayEditor({ date: selDate, existing: task }) : undefined} />
-      ))}
+      <PlanList tasks={tasks} goals={snapshot.goals}
+        onToggle={!isFuture ? toggle : undefined}
+        onEdit={canManage ? (task) => setDayEditor({ date: selDate, existing: task }) : undefined} />
       {tasks.length === 0 && !isFuture && <p className="empty-hint">이 날은 계획이 없어요. 아래에서 추가해요! 🌱</p>}
       {canManage && (
         <div className="add-row"><button type="button" className="add-btn" onClick={() => setDayEditor({ date: selDate })}>＋ 이 날 할일 추가</button></div>

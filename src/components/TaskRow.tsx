@@ -1,4 +1,4 @@
-import type { ScheduleItem, Author } from '../types'
+import type { ScheduleItem, Author, Category } from '../types'
 
 const AUTHOR_LABEL: Record<Author, string> = { me: '내가', mom: '엄마가', dad: '아빠가' }
 
@@ -16,9 +16,11 @@ interface Props {
   onEdit?: (task: ScheduleItem) => void
   onApprove?: (id: string) => void
   canApprove?: boolean
+  /** 소속 목표 꼬리표 (목표별 그룹핑을 하지 않는 평면 리스트에서 연결감 표시) */
+  goalLabel?: { title: string; category: Category }
 }
 
-export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove }: Props) {
+export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove, goalLabel }: Props) {
   const interactive = !!onToggle
   const showApprove = canApprove && task.done && !task.approved
   const showApproved = task.done && task.approved
@@ -38,6 +40,7 @@ export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove }: Props
         <span className="t">{task.title}</span>
         <span className="tmeta">
           <span className={`who ${task.author}`}>{AUTHOR_LABEL[task.author]}</span>
+          {goalLabel && <span className={`goal-chip ${goalLabel.category}`}>🎯 {goalLabel.title}</span>}
           {task.timeLabel && <span className="time">{task.timeLabel}</span>}
           {showApproved && <span className="approved-tag">💛 확인됨</span>}
         </span>

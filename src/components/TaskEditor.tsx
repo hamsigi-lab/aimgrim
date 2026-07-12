@@ -47,12 +47,13 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
   const [recur, setRecur] = useState<Recur>(existing?.recur ?? defaultRecur ?? 'daily')
   const [recurDays, setRecurDays] = useState<number[]>(existing?.recurDays ?? [])
   const [goalId, setGoalId] = useState<string | null>(existing?.goalId ?? prefill?.goalId ?? null)
+  const [per, setPer] = useState<'week' | 'month'>(period === 'month' ? 'month' : 'week')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const isGoal = period !== 'day'
 
-  // 하루 할일이 연결할 수 있는 주/월 목표들
-  const goalOptions = [...(snapshot?.weekGoals ?? []), ...(snapshot?.monthGoal ? [snapshot.monthGoal] : [])]
+  // 하루 할일이 연결할 수 있는 목표들 (전체)
+  const goalOptions = snapshot?.goals ?? [...(snapshot?.weekGoals ?? []), ...(snapshot?.monthGoal ? [snapshot.monthGoal] : [])]
 
   async function save() {
     if (!title.trim()) return
@@ -62,7 +63,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
       if (editing) {
         await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined })
       } else {
-        await createTask({ childId, title: title.trim(), category, period, points, timeLabel, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined })
+        await createTask({ childId, title: title.trim(), category, period: isGoal ? per : 'day', points, timeLabel, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }
@@ -79,7 +80,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="일정 편집">
         <div className="grip" />
-        <h3>{editing ? '일정 고치기' : `${PERIOD_LABEL[period]} 추가`}</h3>
+        <h3>{editing ? '일정 고치기' : isGoal ? '목표 추가' : `${PERIOD_LABEL[period]} 추가`}</h3>
         <div className="form" style={{ marginTop: 12 }}>
           {err && <div className="formerr">{err}</div>}
           <div className="field">
@@ -98,6 +99,16 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
               ))}
             </div>
           </div>
+
+          {isGoal && !editing && (
+            <div className="field">
+              <label>목표 기간</label>
+              <div className="seg">
+                <button type="button" className={per === 'week' ? 'on' : ''} onClick={() => setPer('week')}>이번주</button>
+                <button type="button" className={per === 'month' ? 'on' : ''} onClick={() => setPer('month')}>이번달</button>
+              </div>
+            </div>
+          )}
 
           <div className="field">
             <label htmlFor="t-pts">별점 (해내면 받을 점수)</label>

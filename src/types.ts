@@ -35,6 +35,14 @@ export interface ScheduleItem {
   autoProgress?: boolean
 }
 
+/** 목표(주/월) — 그 아래 하위 계획(daily 실천)을 중첩해 담는다 */
+export interface GoalItem extends ScheduleItem {
+  /** 목표 기간 */
+  period: 'week' | 'month'
+  /** 이 목표를 이루기 위한 하루 실천들 (goal_id로 연결된 day 할일) */
+  subplans: ScheduleItem[]
+}
+
 /** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */
 export interface RewardGoal {
   id: string
@@ -71,6 +79,8 @@ export interface Snapshot {
   history: DayHistory[]
   child: { name: string; points: number }
   todayTasks: ScheduleItem[]
+  /** 모든 목표(주+월) — 하위 계획 중첩 포함. 목표 탭·계획 그룹핑의 원천 */
+  goals: GoalItem[]
   weekGoals: ScheduleItem[]
   monthGoal: ScheduleItem | null
   rewardGoals: RewardGoal[]

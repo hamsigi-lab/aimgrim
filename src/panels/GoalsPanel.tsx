@@ -1,65 +1,79 @@
 import { useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
-import { GoalRow } from '../components/GoalRow'
+import { GoalCard } from '../components/GoalCard'
 import { TaskEditor, type Prefill } from '../components/TaskEditor'
 import { deleteTask } from '../api'
-import type { ScheduleItem } from '../types'
+import type { Category, GoalItem, ScheduleItem } from '../types'
 
-/** 목표 탭 — 이번주·이달의 목표를 설정/관리하고 하루계획에 담는 곳 */
+// 영역(생활습관·학습이 2대 축, 운동·놀이는 자유 추가) — category가 곧 영역
+const AREAS: { cat: Category; emoji: string; name: string; hint: string }[] = [
+  { cat: 'life', emoji: '🌿', name: '기본 생활 습관', hint: '예: 방 깨끗이 쓰기, 스스로 일어나기' },
+  { cat: 'study', emoji: '📚', name: '학습', hint: '예: 수학 3단원 끝내기, 책 4권 읽기' },
+  { cat: 'health', emoji: '💪', name: '운동', hint: '예: 주 3회 운동하기' },
+  { cat: 'play', emoji: '🎨', name: '놀이·취미', hint: '예: 그림 5장 그리기' },
+]
+
+/** 목표 탭 — 영역별로 목표를 세우고, 그 아래 하루 실천(하위 계획)을 중첩해 담는 곳 */
 export function GoalsPanel() {
   const { snapshot, childId, reload } = useApp()
   const { status, me } = useAuth()
-  const [editor, setEditor] = useState<{ period: 'week' | 'month'; existing?: ScheduleItem } | null>(null)
-  const [cascade, setCascade] = useState<Prefill | null>(null)
+  const [goalEditor, setGoalEditor] = useState<{ period: 'week' | 'month'; category?: Category; existing?: GoalItem } | null>(null)
+  const [subEditor, setSubEditor] = useState<{ goalId: string; category: Category; existing?: ScheduleItem } | null>(null)
   if (!snapshot) return null
 
   const canManage = status !== 'demo'
   const isChild = canManage && me?.member?.role === 'child'
-  const week = snapshot.weekGoals
-  const month = snapshot.monthGoal
+  const goals = snapshot.goals
+  const byCat = (cat: Category) => goals.filter((g) => g.category === cat)
+  // 2대 영역(생활·학습)은 늘 보이고, 나머지는 목표가 있을 때만
+  const areas = AREAS.filter((a) => a.cat === 'life' || a.cat === 'study' || byCat(a.cat).length > 0)
 
-  const onCascade = canManage
-    ? (g: ScheduleItem) => setCascade({ title: g.title, category: g.category, goalId: g.id })
-    : undefined
-  const onDelete = canManage
-    ? async (g: ScheduleItem) => { if (window.confirm(`'${g.title}' 목표를 삭제할까요?`)) { await deleteTask(g.id); reload() } }
-    : undefined
+  const onDeleteGoal = async (g: GoalItem) => {
+    if (window.confirm(`'${g.title}' 목표를 삭제할까요? 연결된 실천은 남아요.`)) { await deleteTask(g.id); reload() }
+  }
+  const subPrefill: Prefill | undefined = subEditor && !subEditor.existing
+    ? { goalId: subEditor.goalId, category: subEditor.category } : undefined
 
   return (
     <div className="panel">
       <div className="daterow"><span className="big">우리 목표</span><span className="sub">이루고 싶은 것을 정해요</span></div>
-      <p className="goals-intro">{isChild ? '이번주·이번달 내가 이루고 싶은 목표를 정하고, 하루계획에 담아 실천해봐 🎯'
-        : '먼저 큰 목표를 정하고, 하루계획에 담아 자녀와 함께 실천해요 🎯'}</p>
+      <p className="goals-intro">{isChild
+        ? '영역별로 목표를 세우고, 그 아래 매일 실천할 일을 담아봐. 실천할수록 목표가 채워져 🎯'
+        : '영역별로 큰 목표를 세우고, 그 아래 매일 실천을 담아요. 아이가 실천할수록 목표가 채워집니다 🎯'}</p>
 
-      <div className="sechead"><h3>이번주 목표</h3><span className="count">{week.length}개</span></div>
-      {week.map((g) => (
-        <GoalRow key={g.id} goal={g} onEdit={canManage ? (goal) => setEditor({ period: 'week', existing: goal }) : undefined} onCascade={onCascade} onDelete={onDelete} />
-      ))}
-      {week.length === 0 && <p className="empty-hint">이번주 이루고 싶은 목표를 정해봐요! 🎯</p>}
-      {canManage && (
-        <div className="add-row"><button type="button" className="add-btn" onClick={() => setEditor({ period: 'week' })}>＋ 주간 목표 추가</button></div>
-      )}
+      {areas.map((a) => {
+        const list = byCat(a.cat)
+        return (
+          <section key={a.cat} className="area">
+            <div className="sechead">
+              <h3><span aria-hidden="true">{a.emoji}</span> {a.name}</h3>
+              <span className="count">{list.length}개</span>
+            </div>
+            {list.map((g) => (
+              <GoalCard key={g.id} goal={g} canManage={canManage}
+                onEditGoal={(goal) => setGoalEditor({ period: goal.period, existing: goal })}
+                onDeleteGoal={onDeleteGoal}
+                onAddSub={(goal) => setSubEditor({ goalId: goal.id, category: goal.category })}
+                onEditSub={(goal, sp) => setSubEditor({ goalId: goal.id, category: goal.category, existing: sp })} />
+            ))}
+            {list.length === 0 && <p className="empty-hint" style={{ padding: '2px 2px 10px' }}>{a.hint}</p>}
+            {canManage && (
+              <div className="add-row"><button type="button" className="add-btn" onClick={() => setGoalEditor({ period: 'week', category: a.cat })}>＋ {a.name} 목표 추가</button></div>
+            )}
+          </section>
+        )
+      })}
 
-      <div className="sechead" style={{ marginTop: 20 }}><h3>이달의 목표</h3></div>
-      {month ? (
-        <GoalRow goal={month} onEdit={canManage ? (goal) => setEditor({ period: 'month', existing: goal }) : undefined} onCascade={onCascade} onDelete={onDelete} />
-      ) : (
-        <>
-          <p className="empty-hint">이번달 이루고 싶은 큰 목표를 정해봐요! 📚</p>
-          {canManage && (
-            <div className="add-row"><button type="button" className="add-btn" onClick={() => setEditor({ period: 'month' })}>＋ 이달의 목표 정하기</button></div>
-          )}
-        </>
+      {goalEditor && canManage && (
+        <TaskEditor childId={childId} period={goalEditor.period} existing={goalEditor.existing}
+          prefill={goalEditor.category ? { category: goalEditor.category } : undefined}
+          onClose={() => setGoalEditor(null)} onSaved={reload} />
       )}
-
-      {editor && canManage && (
-        <TaskEditor childId={childId} period={editor.period} existing={editor.existing}
-          onClose={() => setEditor(null)} onSaved={reload} />
-      )}
-      {cascade && canManage && (
-        <TaskEditor childId={childId} period="day" targetDate={snapshot.today} prefill={cascade} defaultRecur="daily"
-          onClose={() => setCascade(null)} onSaved={reload} />
+      {subEditor && canManage && (
+        <TaskEditor childId={childId} period="day" existing={subEditor.existing}
+          prefill={subPrefill} targetDate={snapshot.today} defaultRecur="daily"
+          onClose={() => setSubEditor(null)} onSaved={reload} />
       )}
     </div>
   )

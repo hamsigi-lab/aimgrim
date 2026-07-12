@@ -205,6 +205,27 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     return auto === null ? m : { ...m, progress: auto, autoProgress: true }
   }
 
+  // 하위 계획(목표에 연결된 하루 할일) — 목표별로 묶어 목표 탭에서 중첩 표시. c.done은 오늘 기준.
+  const subRows = await db.prepare(`
+    SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
+    FROM tasks t JOIN members am ON am.id = t.author_id
+    LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+    WHERE t.child_id = ? AND t.period = 'day' AND t.goal_id IS NOT NULL
+    ORDER BY t.sort_order`).bind(date, childId).all<TaskRow>()
+  const subByGoal = new Map<string, ReturnType<typeof mapTask>[]>()
+  for (const r of subRows.results) {
+    const gid = r.goal_id ?? ''
+    const arr = subByGoal.get(gid) ?? []
+    arr.push(mapTask(r)); subByGoal.set(gid, arr)
+  }
+  const mapGoalFull = (r: TaskRow, aStart: string, aEnd: string, period: 'week' | 'month') =>
+    ({ ...mapGoal(r, aStart, aEnd), period, subplans: subByGoal.get(r.id) ?? [] })
+  const goals = [
+    ...week.results.map((r) => mapGoalFull(r, weekStart, weekEnd, 'week')),
+    ...month.results.map((r) => mapGoalFull(r, monthStart, monthEnd, 'month')),
+  ]
+
   return c.json({
     today: date,
     streak,
@@ -212,6 +233,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     history,
     child: { name: child.display_name, points: child.points },
     todayTasks: dayRows.results.map(mapTask),
+    goals,
     weekGoals: week.results.map((r) => mapGoal(r, weekStart, weekEnd)),
     monthGoal: month.results.length ? mapGoal(month.results[0], monthStart, monthEnd) : null,
     rewardGoals: rewards.results.map((r) => ({

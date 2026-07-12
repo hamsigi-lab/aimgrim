@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
-import { TaskRow } from '../components/TaskRow'
+import { PlanList } from '../components/PlanList'
 import { TaskEditor } from '../components/TaskEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
@@ -94,13 +94,12 @@ export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
-      {tasks.map((t) => (
-        <TaskRow
-          key={t.id} task={t} onToggle={canToggle ? handleToggle : undefined}
-          onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
-          canApprove={isParent && canToggle} onApprove={onApprove}
-        />
-      ))}
+      <PlanList
+        tasks={tasks} goals={snapshot.goals}
+        onToggle={canToggle ? handleToggle : undefined}
+        onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
+        canApprove={isParent && canToggle} onApprove={onApprove}
+      />
 
       {tasks.length === 0 && !otherBusy && (
         <p className="empty-hint">
