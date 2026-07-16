@@ -20,6 +20,7 @@ export interface TaskRow {
   parent_kind: string | null; points: number; time_label: string | null
   progress: number; progress_label: string | null; done: number | null; approved: number | null
   recur?: string | null; goal_id?: string | null; recur_days?: number | null
+  note?: string | null; minutes?: number | null
 }
 
 /** recur/시작일 기준으로 [aStart, aEnd] 범위에서 이 할일이 나타나는 날 수 */

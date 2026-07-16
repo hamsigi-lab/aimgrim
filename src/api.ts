@@ -80,6 +80,8 @@ export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', inp
 export const updateTask = (id: string, input: Omit<TaskInput, 'childId' | 'period'>) => mutate(`/api/tasks/${id}`, 'PUT', input)
 export const deleteTask = (id: string) => mutate(`/api/tasks/${id}`, 'DELETE')
 export const approveTask = (id: string) => mutate(`/api/tasks/${id}/approve`, 'POST', {})
+export const setTaskNote = (id: string, input: { childId: string; date: string; note: string; minutes: number }) =>
+  mutate(`/api/tasks/${id}/note`, 'POST', input)
 export const createEncouragement = (childId: string, message: string) => mutate('/api/encouragements', 'POST', { childId, message })
 export const createRewardGoal = (input: { childId: string; title: string; emoji: string; tone: string; cost: number }) => mutate('/api/reward-goals', 'POST', input)
 export const deleteRewardGoal = (id: string) => mutate(`/api/reward-goals/${id}`, 'DELETE')
@@ -135,3 +137,26 @@ export function getEvents(familyId: string, month?: string): Promise<{ events: F
 export const createEvent = (familyId: string, input: EventInput) => mutate<{ ok: boolean; id: string }>(`/api/family/${familyId}/events`, 'POST', input)
 export const updateEvent = (familyId: string, id: string, input: EventInput) => mutate(`/api/family/${familyId}/events/${id}`, 'PUT', input)
 export const deleteEvent = (familyId: string, id: string) => mutate(`/api/family/${familyId}/events/${id}`, 'DELETE')
+
+// ---- 순공시간 ----
+export interface Subject { id: string; name: string; color: string }
+export interface StudySession { id: string; subjectId: string | null; subjectName: string; color: string; minutes: number; note: string; taskId: string | null; createdAt: number }
+export interface SubjectMin { name: string; color: string; min: number }
+export interface StudyDay { date: string; isToday?: boolean; totalMin: number; bySubject?: SubjectMin[] }
+export interface StudySnapshot {
+  date: string
+  subjects: Subject[]
+  today: { totalMin: number; sessions: StudySession[] }
+  week: { start: string; end: string; total: number; maxMin: number; days: StudyDay[] }
+  month: { label: string; start: string; end: string; total: number; maxMin: number; days: StudyDay[] }
+  streak: number
+}
+export function getStudy(familyId: string, childId: string, date?: string): Promise<StudySnapshot> {
+  const q = date ? `&date=${date}` : ''
+  return fetch(`/api/family/${familyId}/study?childId=${childId}${q}`).then((r) => json<StudySnapshot>(r))
+}
+export const createSession = (input: { childId: string; subjectId?: string | null; subjectName: string; color: string; minutes: number; note?: string; taskId?: string | null; mode?: string; date?: string }) =>
+  mutate<{ ok: boolean; id: string }>('/api/study/sessions', 'POST', input)
+export const deleteSession = (id: string) => mutate(`/api/study/sessions/${id}`, 'DELETE')
+export const createSubject = (input: { childId: string; name: string; color: string }) => mutate<{ ok: boolean; id: string }>('/api/study/subjects', 'POST', input)
+export const deleteSubject = (id: string) => mutate(`/api/study/subjects/${id}`, 'DELETE')

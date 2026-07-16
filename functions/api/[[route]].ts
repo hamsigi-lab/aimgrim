@@ -11,6 +11,7 @@ import { authRoutes } from '../_domains/auth'
 import { scheduleRoutes } from '../_domains/schedule'
 import { rewardRoutes } from '../_domains/rewards'
 import { calendarRoutes } from '../_domains/calendar'
+import { studyRoutes } from '../_domains/study'
 
 const app = new Hono<{ Bindings: Bindings }>().basePath('/api')
 
@@ -18,5 +19,6 @@ app.route('/', authRoutes)      // 인증·가족·멤버
 app.route('/', scheduleRoutes)  // 일정(할일/목표)·완료·승인
 app.route('/', rewardRoutes)    // 보상·별점 내역·격려
 app.route('/', calendarRoutes)  // 가족 공유 캘린더
+app.route('/', studyRoutes)     // 순공시간(과목·세션·통계)
 
 export const onRequest = handle(app)

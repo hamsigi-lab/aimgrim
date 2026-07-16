@@ -33,6 +33,10 @@ export interface ScheduleItem {
   goalId: string | null
   /** 목표 진행률이 연결된 할일로 자동 계산됨 */
   autoProgress?: boolean
+  /** 완료 기록 — 오늘 무엇을 했는지 한 줄 메모 */
+  note?: string
+  /** 완료 기록 — 소요 시간(분, 선택) */
+  minutes?: number
 }
 
 /** 목표(주/월) — 그 아래 하위 계획(daily 실천)을 중첩해 담는다 */

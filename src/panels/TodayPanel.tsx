@@ -3,17 +3,18 @@ import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { PlanList } from '../components/PlanList'
 import { TaskEditor } from '../components/TaskEditor'
+import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
-import { GoalChips } from '../components/GoalChips'
 import { approveTask, toggleTask as apiToggle, fetchDayTasks, DEMO_FAMILY } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
-export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
+export function TodayPanel() {
   const { snapshot, childId, toggleTask, reload } = useApp()
   const { status, me, familyId } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
+  const [noteFor, setNoteFor] = useState<ScheduleItem | null>(null)
   const [encourage, setEncourage] = useState(false)
   const [templates, setTemplates] = useState(false)
   const [viewDate, setViewDate] = useState<string | null>(null)
@@ -26,7 +27,6 @@ export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
   const isToday = date === today
   const isFuture = date > today
 
-  // 다른 날짜로 이동하면 그 날짜의 하루 계획을 불러온다
   useEffect(() => {
     if (isToday) { setOtherTasks(null); return }
     setOtherBusy(true)
@@ -45,24 +45,25 @@ export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
 
   const tasks = isToday ? snapshot.todayTasks : (otherTasks ?? [])
   const doneCount = tasks.filter((t) => t.done).length
+  const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0
   const canToggle = !isFuture
 
+  function refetchOther() {
+    fetchDayTasks(date, fam, childId).then((r) => setOtherTasks(r.tasks)).catch(() => {})
+    reload()
+  }
   async function onApprove(id: string) {
     await approveTask(id)
     if (isToday) reload(); else refetchOther()
   }
-  function refetchOther() {
-    fetchDayTasks(date, fam, childId).then((r) => setOtherTasks(r.tasks)).catch(() => {})
-    reload() // 별점 반영
-  }
   async function handleToggle(id: string) {
     if (isToday) { toggleTask(id); return }
     if (isFuture) return
-    // 지난 날짜: 낙관적 갱신 없이 서버 반영 후 재조회
     setOtherTasks((prev) => prev ? prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) : prev)
     try { await apiToggle(id, childId, date) } catch { /* 무시 */ }
     refetchOther()
   }
+  function afterNote() { if (isToday) reload(); else refetchOther() }
 
   return (
     <div className="panel">
@@ -77,27 +78,22 @@ export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
         {isToday && snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
       </div>
 
-      {isToday && <GoalChips label="이번주 목표" goals={snapshot.weekGoals} onOpen={onGoToGoals} />}
-
-      {isParent && isToday && (
-        <div className="approve">
-          <span className="ai" aria-hidden="true">🧡</span>
-          <span className="atx">아이가 해낸 일을 확인하고 응원해 주세요</span>
-          <button type="button" className="abtn" onClick={() => setEncourage(true)}>격려 보내기</button>
+      {/* 오늘 할일 — 화면 주인공. 진행 요약 + 큰 카드 평면 리스트(목표는 색·꼬리표로만) */}
+      <div className="today-sum">
+        <div className="ts-top">
+          <h3>{isToday ? '오늘 할일' : '이 날 할일'}</h3>
+          <span className="ts-count"><b>{doneCount}</b> / {tasks.length} 완료</span>
         </div>
-      )}
-
-      <div className="sechead">
-        <h3>{isToday ? '오늘 할일' : '이 날 할일'}</h3>
-        <span className="count">{doneCount} / {tasks.length} 완료</span>
+        {tasks.length > 0 && <div className="ts-bar"><span className="ts-fill" style={{ width: `${pct}%` }} /></div>}
       </div>
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
       <PlanList
-        tasks={tasks} goals={snapshot.goals}
+        tasks={tasks} goals={snapshot.goals} forceFlat
         onToggle={canToggle ? handleToggle : undefined}
         onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
+        onNote={canManage ? (task) => setNoteFor(task) : undefined}
         canApprove={isParent && canToggle} onApprove={onApprove}
       />
 
@@ -120,9 +116,21 @@ export function TodayPanel({ onGoToGoals }: { onGoToGoals?: () => void }) {
         </div>
       )}
 
+      {isParent && isToday && (
+        <div className="approve" style={{ marginTop: 14, marginBottom: 0 }}>
+          <span className="ai" aria-hidden="true">🧡</span>
+          <span className="atx">아이가 해낸 일을 확인하고 응원해 주세요</span>
+          <button type="button" className="abtn" onClick={() => setEncourage(true)}>격려 보내기</button>
+        </div>
+      )}
+
       {editor && canManage && (
         <TaskEditor childId={childId} period="day" existing={editor.existing}
           onClose={() => setEditor(null)} onSaved={reload} />
+      )}
+      {noteFor && canManage && (
+        <NoteEditor task={noteFor} childId={childId} date={date}
+          onClose={() => setNoteFor(null)} onSaved={afterNote} />
       )}
       {encourage && isParent && (
         <EncourageComposer childId={childId} onClose={() => setEncourage(false)} onSaved={reload} />

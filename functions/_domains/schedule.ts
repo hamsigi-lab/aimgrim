@@ -25,6 +25,7 @@ function mapScheduleItem(r: TaskRow) {
     done: !!r.done, approved: !!r.approved,
     progress: r.progress, progressLabel: r.progress_label ?? '',
     recur: r.recur ?? 'daily', recurDays: maskToDays(r.recur_days), goalId: r.goal_id ?? null,
+    note: r.note ?? '', minutes: r.minutes ?? 0,
   }
 }
 
@@ -45,7 +46,7 @@ scheduleRoutes.get('/family/:familyId/day', async (c) => {
   const isWeekday = isWeekdayOf(date)
   const rows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
@@ -75,7 +76,7 @@ scheduleRoutes.get('/family/:familyId/week', async (c) => {
     const date = d.toISOString().slice(0, 10)
     const rows = await db.prepare(`
       SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-             t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
+             t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved, c.note, c.minutes
       FROM tasks t JOIN members am ON am.id = t.author_id
       LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
       WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
@@ -134,7 +135,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   // 반복 규칙(시작일 기준)에 따라 오늘 보여줄 하루 할일만 선별
   const dayRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
@@ -208,7 +209,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   // 하위 계획(목표에 연결된 하루 할일) — 목표별로 묶어 목표 탭에서 중첩 표시. c.done은 오늘 기준.
   const subRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND t.goal_id IS NOT NULL
@@ -451,5 +452,34 @@ scheduleRoutes.post('/tasks/:id/approve', async (c) => {
   if (!comp?.done) return c.json({ error: 'not_completed' }, 400)
   await db.prepare('UPDATE completions SET approved = 1, approved_at = ? WHERE task_id = ? AND the_date = ?')
     .bind(Date.now(), taskId, date).run()
+  return c.json({ ok: true })
+})
+
+// 공부 기록 — 완료된 할일에 '무엇을 했는지' 메모 + 소요 시간(분) 남기기
+scheduleRoutes.post('/tasks/:taskId/note', async (c) => {
+  const taskId = c.req.param('taskId')
+  const db = c.env.DB
+  const task = await db.prepare('SELECT id, family_id, child_id FROM tasks WHERE id = ?')
+    .bind(taskId).first<{ id: string; family_id: string; child_id: string }>()
+  if (!task) return c.json({ error: 'task_not_found' }, 404)
+  if (task.family_id !== 'fam_demo') {
+    const auth = await authChild(db, c.req.header('Cookie') ?? null, task.child_id)
+    if (!auth) return c.json({ error: 'unauthorized' }, 401)
+  }
+
+  const today = familyDate(task.family_id)
+  const body = await c.req.json<{ date?: string; note?: string; minutes?: number }>().catch(() => ({} as { date?: string; note?: string; minutes?: number }))
+  let date = today
+  if (body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+    if (body.date > today) return c.json({ error: 'future_date' }, 400)
+    date = body.date
+  }
+  const comp = await db.prepare('SELECT done FROM completions WHERE task_id = ? AND the_date = ?').bind(taskId, date).first<{ done: number }>()
+  if (!comp?.done) return c.json({ error: 'not_completed' }, 400) // 완료한 항목에만 기록
+
+  const note = (body.note ?? '').trim().slice(0, 80) || null
+  const minutes = Math.max(0, Math.min(600, Math.round(Number(body.minutes ?? 0)))) || null
+  await db.prepare('UPDATE completions SET note = ?, minutes = ? WHERE task_id = ? AND the_date = ?')
+    .bind(note, minutes, taskId, date).run()
   return c.json({ ok: true })
 })

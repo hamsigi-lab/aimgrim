@@ -6,22 +6,24 @@ interface Props {
   goals: GoalItem[]
   onToggle?: (id: string) => void
   onEdit?: (task: ScheduleItem) => void
+  onNote?: (task: ScheduleItem) => void
   canApprove?: boolean
   onApprove?: (id: string) => void
+  /** 오늘 화면: 목표 그룹핑 없이 평면 + 목표 꼬리표로만 (오늘 할일 부각) */
+  forceFlat?: boolean
 }
 
-/** 계획(오늘/주) 리스트 — 할일을 상위 목표별로 묶어 보여준다.
- *  목표 헤더의 진행바가 그 목표의 실천을 해낼수록 눈앞에서 채워진다(롤업 시각화).
- *  목표가 2개 미만이면 굳이 나누지 않고 평면 리스트 + 목표 꼬리표로 표시. */
-export function PlanList({ tasks, goals, onToggle, onEdit, canApprove, onApprove }: Props) {
+/** 계획 리스트 — 오늘 뷰는 평면(목표는 색·꼬리표로만)로 할일을 부각하고,
+ *  주 뷰는 목표별로 묶어 진행바 롤업(실천할수록 채워짐)을 보여준다. */
+export function PlanList({ tasks, goals, onToggle, onEdit, onNote, canApprove, onApprove, forceFlat }: Props) {
   const goalsById = new Map(goals.map((g) => [g.id, g]))
   const linkedIds = new Set(tasks.map((t) => t.goalId).filter((id): id is string => !!id && goalsById.has(id)))
-  const grouped = linkedIds.size >= 2
+  const grouped = !forceFlat && linkedIds.size >= 2
 
   const row = (t: ScheduleItem, withChip: boolean) => {
     const g = withChip && t.goalId ? goalsById.get(t.goalId) : undefined
     return (
-      <TaskRow key={t.id} task={t} onToggle={onToggle} onEdit={onEdit} canApprove={canApprove} onApprove={onApprove}
+      <TaskRow key={t.id} task={t} onToggle={onToggle} onEdit={onEdit} onNote={onNote} canApprove={canApprove} onApprove={onApprove}
         goalLabel={g ? { title: g.title, category: g.category } : undefined} />
     )
   }

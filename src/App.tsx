@@ -8,19 +8,21 @@ import { GoalsPanel } from './panels/GoalsPanel'
 import { TodayPanel } from './panels/TodayPanel'
 import { WeekPanel } from './panels/WeekPanel'
 import { MonthPanel } from './panels/MonthPanel'
+import { StudyPanel } from './panels/StudyPanel'
 import { PointsPanel } from './panels/PointsPanel'
 import { CalendarPanel } from './panels/CalendarPanel'
 import { MenuSheet } from './components/MenuSheet'
 import { SurpriseBox } from './components/SurpriseBox'
 import { Mascot } from './components/Mascot'
 
-type BottomTab = 'goals' | 'plan' | 'points' | 'calendar'
+type BottomTab = 'goals' | 'plan' | 'study' | 'points' | 'calendar'
 type PlanView = 'day' | 'week' | 'month'
 
 // 하단 탭 = 구별되는 섹션(서비스)
 const NAV: { id: BottomTab; icon: string; label: string }[] = [
   { id: 'goals', icon: '🎯', label: '목표' },
   { id: 'plan', icon: '📋', label: '계획' },
+  { id: 'study', icon: '⏱', label: '순공' },
   { id: 'points', icon: '⭐', label: '별점' },
   { id: 'calendar', icon: '📆', label: '캘린더' },
 ]
@@ -130,9 +132,10 @@ function Shell() {
       <main className="body" ref={bodyRef}>
         {floatKey > 0 && <div className="float go" key={floatKey} aria-hidden="true">+{lastGain}</div>}
         {tab === 'goals' && <GoalsPanel />}
-        {tab === 'plan' && planView === 'day' && <TodayPanel onGoToGoals={() => go('goals')} />}
+        {tab === 'plan' && planView === 'day' && <TodayPanel />}
         {tab === 'plan' && planView === 'week' && <WeekPanel onGoToGoals={() => go('goals')} />}
         {tab === 'plan' && planView === 'month' && <MonthPanel onOpenDay={() => goPlan('day')} onGoToGoals={() => go('goals')} />}
+        {tab === 'study' && <StudyPanel />}
         {tab === 'points' && <PointsPanel celebrating={celebrating} />}
         {tab === 'calendar' && <CalendarPanel />}
       </main>
