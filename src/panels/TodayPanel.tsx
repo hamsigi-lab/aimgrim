@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { PlanList } from '../components/PlanList'
-import { TaskEditor } from '../components/TaskEditor'
+import { TaskEditor, type Prefill } from '../components/TaskEditor'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
@@ -12,10 +12,10 @@ import type { ScheduleItem } from '../types'
 
 const fh = (m: number) => `${Math.round((m / 60) * 10) / 10}시간`
 
-export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
+export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => void; onGoToGoals?: () => void }) {
   const { snapshot, childId, toggleTask, reload } = useApp()
   const { status, me, familyId } = useAuth()
-  const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
+  const [editor, setEditor] = useState<{ existing?: ScheduleItem; prefill?: Prefill } | null>(null)
   const [noteFor, setNoteFor] = useState<ScheduleItem | null>(null)
   const [encourage, setEncourage] = useState(false)
   const [templates, setTemplates] = useState(false)
@@ -53,6 +53,8 @@ export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
   const doneCount = tasks.filter((t) => t.done).length
   const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0
   const canToggle = !isFuture
+  // 이 날짜가 기간에 든 목표 = 계획에 자동 반영 (목표 탭에서 기간만 정하면 여기 보임)
+  const activeGoals = snapshot.goals.filter((g) => (!g.startDate || g.startDate <= date) && (!g.endDate || g.endDate >= date))
 
   function refetchOther() {
     fetchDayTasks(date, fam, childId).then((r) => setOtherTasks(r.tasks)).catch(() => {})
@@ -84,14 +86,26 @@ export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
         {isToday && snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
       </div>
 
-      {/* 오늘 할일 — 화면 주인공. 진행 요약 + 큰 카드 평면 리스트(목표는 색·꼬리표로만) */}
-      <div className="today-sum">
-        <div className="ts-top">
-          <h3>{isToday ? '오늘 할일' : '이 날 할일'}</h3>
-          <span className="ts-count"><b>{doneCount}</b> / {tasks.length} 완료</span>
+      {/* 이 기간 목표 — 목표 탭에서 기간을 정하면 그 기간 동안 계획에 자동으로 나타남 */}
+      {activeGoals.length > 0 && (
+        <div className="plangoals">
+          <button type="button" className="pgs-head" onClick={onGoToGoals}>🎯 이 기간 목표 {activeGoals.length} <span className="pgs-more">관리 ›</span></button>
+          {activeGoals.map((g) => (
+            <div key={g.id} className="pgoal">
+              <span className={`pg-dot ${g.category}`} aria-hidden="true" />
+              <span className="pgoal-mid">
+                <span className="pgoal-t">{g.title}{typeof g.dDay === 'number' && g.dDay >= 0 && <em className="pgoal-dday">D-{g.dDay}</em>}</span>
+                <span className="pgoal-bar"><i style={{ width: `${g.progress}%` }} /></span>
+              </span>
+              <span className="pgoal-pct">{g.progress}%</span>
+              {canManage && (
+                <button type="button" className="pgoal-add" aria-label="이 목표 실천 담기" title="이 목표를 위한 실천 담기"
+                  onClick={() => setEditor({ prefill: { goalId: g.id, category: g.category, endDate: g.endDate ?? undefined } })}>＋</button>
+              )}
+            </div>
+          ))}
         </div>
-        {tasks.length > 0 && <div className="ts-bar"><span className="ts-fill" style={{ width: `${pct}%` }} /></div>}
-      </div>
+      )}
 
       {/* 순공 자동 요약 — 매일 순공하면 여기 자동 반영 (탭하면 순공 탭) */}
       {isToday && study && (study.today.totalMin > 0 || study.goals.length > 0) && (
@@ -103,6 +117,15 @@ export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
           <span className="ss-arrow" aria-hidden="true">›</span>
         </button>
       )}
+
+      {/* 오늘 할일 — 화면 주인공. 진행 요약 + 큰 카드 평면 리스트(목표는 색·꼬리표로만) */}
+      <div className="today-sum">
+        <div className="ts-top">
+          <h3>{isToday ? '오늘 할일' : '이 날 할일'}</h3>
+          <span className="ts-count"><b>{doneCount}</b> / {tasks.length} 완료</span>
+        </div>
+        {tasks.length > 0 && <div className="ts-bar"><span className="ts-fill" style={{ width: `${pct}%` }} /></div>}
+      </div>
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
@@ -143,6 +166,7 @@ export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
 
       {editor && canManage && (
         <TaskEditor childId={childId} period="day" existing={editor.existing}
+          prefill={editor.prefill} targetDate={date} defaultRecur={editor.prefill ? 'daily' : undefined}
           onClose={() => setEditor(null)} onSaved={reload} />
       )}
       {noteFor && canManage && (
