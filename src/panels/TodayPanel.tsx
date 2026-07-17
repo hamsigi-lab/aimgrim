@@ -23,7 +23,7 @@ function Gear() {
 }
 
 export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => void; onGoToGoals?: () => void }) {
-  const { snapshot, childId, toggleTask, reload } = useApp()
+  const { snapshot, childId, toggleTask, reload, refresh } = useApp()
   const { status, me, familyId } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem; prefill?: Prefill } | null>(null)
   const [goalEdit, setGoalEdit] = useState<GoalItem | null>(null)
@@ -91,9 +91,9 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
     const wasDone = !!g.todayDone
     try { await apiToggle(g.todayPracticeId, childId, date) } catch { /* 무시 */ }
     if (!wasDone) setNoteFor({ id: g.todayPracticeId, title: g.title } as unknown as ScheduleItem)
-    reload()
+    refresh() // 로딩 화면 없이 갱신 (기록 창 유지)
   }
-  function afterNote() { if (isToday) reload(); else refetchOther() }
+  function afterNote() { if (isToday) refresh(); else refetchOther() }
 
   return (
     <div className="panel">

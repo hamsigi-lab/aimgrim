@@ -18,6 +18,8 @@ interface AppState {
   todayTotal: number
   toggleTask: (id: string) => void
   reload: () => void
+  /** 로딩 화면 없이 스냅샷만 조용히 다시 불러오기 (시트가 열린 채 갱신할 때) */
+  refresh: () => void
   /** 깜짝 상자 (도착 시 열기) */
   surprise: Surprise | null
   showSurprise: (s: Surprise) => void
@@ -44,6 +46,12 @@ export function AppProvider(
       .then((snap) => { setSnapshot(snap); setPoints(snap.child.points) })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : '불러오기 실패'))
       .finally(() => setLoading(false))
+  }, [familyId, childId])
+
+  const refresh = useCallback(() => {
+    fetchSnapshot(familyId, childId)
+      .then((snap) => { setSnapshot(snap); setPoints(snap.child.points) })
+      .catch(() => { /* 조용히 무시 */ })
   }, [familyId, childId])
 
   useEffect(() => { load() }, [load])
@@ -86,8 +94,8 @@ export function AppProvider(
   const clearSurprise = useCallback(() => setSurprise(null), [])
 
   const value = useMemo<AppState>(
-    () => ({ childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load, surprise, showSurprise, clearSurprise }),
-    [childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load, surprise, showSurprise, clearSurprise],
+    () => ({ childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, reload: load, refresh, surprise, showSurprise, clearSurprise }),
+    [childId, loading, error, snapshot, points, lastGain, celebrateTick, doneCount, todayTotal, toggleTask, load, refresh, surprise, showSurprise, clearSurprise],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
