@@ -55,6 +55,8 @@ export interface GoalItem extends ScheduleItem {
   todayPracticeId?: string
   /** 오늘 이 목표를 체크(실천)했는지 */
   todayDone?: boolean
+  /** 오늘 이 목표에 남긴 '한 일' 기록 메모 */
+  todayNote?: string
 }
 
 /** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */

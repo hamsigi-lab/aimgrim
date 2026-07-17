@@ -168,10 +168,12 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     }
     await db.batch(stmts)
   }
-  // 오늘 목표 체크 상태
-  const gpDone = new Set((await db.prepare(
-    "SELECT c.task_id AS tid FROM completions c JOIN tasks t ON t.id = c.task_id WHERE t.child_id = ? AND c.the_date = ? AND c.done = 1 AND substr(t.id,1,3) = 'gp_'")
-    .bind(childId, date).all<{ tid: string }>()).results.map((r) => r.tid))
+  // 오늘 목표 체크 상태 + 기록 메모
+  const gpRows = (await db.prepare(
+    "SELECT c.task_id AS tid, c.note AS note FROM completions c JOIN tasks t ON t.id = c.task_id WHERE t.child_id = ? AND c.the_date = ? AND c.done = 1 AND substr(t.id,1,3) = 'gp_'")
+    .bind(childId, date).all<{ tid: string; note: string | null }>()).results
+  const gpDone = new Set(gpRows.map((r) => r.tid))
+  const gpNote = new Map(gpRows.map((r) => [r.tid, r.note ?? '']))
 
   const rewards = await db
     .prepare('SELECT id, title, emoji, tone, cost, redeemed_at FROM reward_goals WHERE child_id = ? ORDER BY sort_order')
@@ -250,7 +252,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     const gs = hasRange ? r.start_date! : aStart
     const ge = hasRange ? r.end_date! : aEnd
     const dDay = r.end_date ? Math.ceil((Date.parse(r.end_date + 'T00:00:00Z') - Date.parse(date + 'T00:00:00Z')) / 86400000) : null
-    return { ...mapGoal(r, gs, ge), period, subplans: subByGoal.get(r.id) ?? [], dDay, todayPracticeId: 'gp_' + r.id, todayDone: gpDone.has('gp_' + r.id) }
+    return { ...mapGoal(r, gs, ge), period, subplans: subByGoal.get(r.id) ?? [], dDay, todayPracticeId: 'gp_' + r.id, todayDone: gpDone.has('gp_' + r.id), todayNote: gpNote.get('gp_' + r.id) ?? '' }
   }
   const goals = [
     ...week.results.map((r) => mapGoalFull(r, weekStart, weekEnd, 'week')),

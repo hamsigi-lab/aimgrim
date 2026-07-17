@@ -45,6 +45,7 @@ export function StudyGoalEditor({ childId, today, existing, onClose, onSaved }: 
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="순공 목표 세우기">
         <div className="grip" />
+        <button type="button" className="sheet-close" aria-label="닫기" onClick={onClose}>✕</button>
         <h3>{existing ? '순공 목표 고치기' : '순공 목표 세우기 ⏱'}</h3>
         <div className="form" style={{ marginTop: 10 }}>
           {err && <div className="formerr">{err}</div>}

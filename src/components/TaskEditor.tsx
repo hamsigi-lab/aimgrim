@@ -107,6 +107,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="일정 편집">
         <div className="grip" />
+        <button type="button" className="sheet-close" aria-label="닫기" onClick={onClose}>✕</button>
         <h3>{editing ? '일정 고치기' : isGoal ? '목표 세우기' : `${PERIOD_LABEL[period]} 추가`}</h3>
         <div className="form" style={{ marginTop: 12 }}>
           {err && <div className="formerr">{err}</div>}

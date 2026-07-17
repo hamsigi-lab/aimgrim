@@ -27,6 +27,7 @@ export function NoteEditor({ task, childId, date, onClose, onSaved }: {
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="공부 기록">
         <div className="grip" />
+        <button type="button" className="sheet-close" aria-label="닫기" onClick={onClose}>✕</button>
         <h3>무엇을 했는지 기록해요 📝</h3>
         <p className="note-sub">{task.title}</p>
         <div className="form" style={{ marginTop: 10 }}>
