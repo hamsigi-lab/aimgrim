@@ -95,20 +95,39 @@ scheduleRoutes.get('/family/:familyId/overview', async (c) => {
   if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
 
   const date = familyDate(familyId)
+  const isWk = isWeekdayOf(date), dBit = dayBitOf(date)
   const kids = await db.prepare('SELECT id, display_name, points FROM members WHERE family_id = ? AND role = \'child\' ORDER BY created_at')
     .bind(familyId).all<{ id: string; display_name: string; points: number }>()
 
   const children = []
   for (const k of kids.results) {
-    const total = await db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE child_id = ? AND period = \'day\'').bind(k.id).first<{ n: number }>()
-    const comp = await db.prepare(`
-      SELECT COALESCE(SUM(c.done),0) AS done,
+    // 오늘 할일 (gp_ 제외·반복 규칙 적용)
+    const day = await db.prepare(`
+      SELECT COUNT(*) AS total,
+             COALESCE(SUM(CASE WHEN c.done = 1 THEN 1 ELSE 0 END),0) AS done,
              COALESCE(SUM(CASE WHEN c.done = 1 AND c.approved = 0 THEN 1 ELSE 0 END),0) AS pending
-      FROM completions c JOIN tasks t ON t.id = c.task_id
-      WHERE t.child_id = ? AND t.period = 'day' AND c.the_date = ?`).bind(k.id, date).first<{ done: number; pending: number }>()
+      FROM tasks t LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+      WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}`)
+      .bind(date, k.id, ...dayRecurBinds(date, isWk, dBit)).first<{ total: number; done: number; pending: number }>()
+    // 오늘 목표 (기간에 든 목표 수 / 오늘 체크한 수)
+    const goals = await db.prepare("SELECT start_date, end_date FROM tasks WHERE child_id = ? AND period IN ('week','month')")
+      .bind(k.id).all<{ start_date: string | null; end_date: string | null }>()
+    const goalTotal = goals.results.filter((g) => (!g.start_date || g.start_date <= date) && (!g.end_date || g.end_date >= date)).length
+    const goalDone = (await db.prepare("SELECT COUNT(*) AS n FROM completions c JOIN tasks t ON t.id = c.task_id WHERE t.child_id = ? AND c.the_date = ? AND c.done = 1 AND substr(t.id,1,3) = 'gp_'")
+      .bind(k.id, date).first<{ n: number }>())?.n ?? 0
+    // 오늘 순공
+    const studyMin = (await db.prepare('SELECT COALESCE(SUM(minutes),0) AS m FROM study_sessions WHERE child_id = ? AND the_date = ?').bind(k.id, date).first<{ m: number }>())?.m ?? 0
+    // 누적 순공 목표(첫 목표)
+    const sg = await db.prepare('SELECT target_min, start_date, end_date FROM study_goals WHERE child_id = ? ORDER BY created_at LIMIT 1').bind(k.id).first<{ target_min: number; start_date: string; end_date: string }>()
+    let studyGoal = null
+    if (sg) {
+      const acc = (await db.prepare('SELECT COALESCE(SUM(minutes),0) AS m FROM study_sessions WHERE child_id = ? AND the_date >= ? AND the_date <= ?').bind(k.id, sg.start_date, sg.end_date).first<{ m: number }>())?.m ?? 0
+      studyGoal = { accMin: acc, targetMin: sg.target_min, progress: Math.min(100, Math.round((acc / sg.target_min) * 100)) }
+    }
     children.push({
       id: k.id, name: k.display_name, points: k.points,
-      todayTotal: total?.n ?? 0, todayDone: comp?.done ?? 0, pending: comp?.pending ?? 0,
+      todayTotal: day?.total ?? 0, todayDone: day?.done ?? 0, pending: day?.pending ?? 0,
+      goalTotal, goalDone, studyMin, studyGoal,
     })
   }
   return c.json({ children })

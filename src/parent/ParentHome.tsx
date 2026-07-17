@@ -5,6 +5,8 @@ import { Mascot } from '../components/Mascot'
 import { MenuSheet } from '../components/MenuSheet'
 import { AddChildForm } from '../onboarding/AddChildForm'
 
+const fh = (m: number) => (m < 60 ? `${m}분` : `${Math.round((m / 60) * 10) / 10}시간`)
+
 export function ParentHome() {
   const { me, setActiveChild, setMe, familyId } = useAuth()
   const [overview, setOverview] = useState<ChildOverview[] | null>(null)
@@ -49,7 +51,18 @@ export function ParentHome() {
                       {ch.pending > 0 && <span className="pending-badge">확인 {ch.pending}</span>}
                     </div>
                     <div className="ph-bar"><i style={{ width: `${pct}%` }} /></div>
-                    <div className="ph-meta">오늘 {ch.todayDone}/{ch.todayTotal} 완료 · ⭐ {ch.points}</div>
+                    <div className="ph-chips">
+                      <span className="phc">📋 오늘 할일 <b>{ch.todayDone}/{ch.todayTotal}</b></span>
+                      {ch.goalTotal > 0 && <span className="phc">🎯 목표 <b>{ch.goalDone}/{ch.goalTotal}</b></span>}
+                      <span className="phc study">⏱ 순공 <b>{fh(ch.studyMin)}</b></span>
+                      <span className="phc">⭐ <b>{ch.points}</b></span>
+                    </div>
+                    {ch.studyGoal && (
+                      <div className="ph-sg">
+                        <div className="ph-sgbar"><i style={{ width: `${ch.studyGoal.progress}%` }} /></div>
+                        <span>방학 순공 {fh(ch.studyGoal.accMin)} / {fh(ch.studyGoal.targetMin)} · {ch.studyGoal.progress}%</span>
+                      </div>
+                    )}
                   </div>
                   <div className="ph-go" aria-hidden="true">›</div>
                 </button>

@@ -110,6 +110,13 @@ export interface ChildOverview {
   todayTotal: number
   todayDone: number
   pending: number
+  /** 오늘 기간 목표 수 / 오늘 체크한 목표 수 */
+  goalTotal: number
+  goalDone: number
+  /** 오늘 순공 시간(분) */
+  studyMin: number
+  /** 누적 순공 목표 진행 (있을 때) */
+  studyGoal: { accMin: number; targetMin: number; progress: number } | null
 }
 export function getOverview(familyId: string): Promise<{ children: ChildOverview[] }> {
   return fetch(`/api/family/${familyId}/overview`).then((r) => json<{ children: ChildOverview[] }>(r))
