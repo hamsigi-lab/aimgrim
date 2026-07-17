@@ -29,6 +29,18 @@ async function authForChild(db: D1Database, cookie: string | null, childId: stri
   return auth ? { familyId: m.family_id } : null
 }
 
+function validateGoal(b: { title?: string; targetMin?: number; dailyTargetMin?: number; startDate?: string; endDate?: string }):
+  { title: string; targetMin: number; dailyTargetMin: number | null; startDate: string; endDate: string } | { error: string } {
+  const title = (b.title ?? '').trim().slice(0, 30) || '순공 목표'
+  const targetMin = Math.round(Number(b.targetMin ?? 0))
+  if (!(targetMin >= 1 && targetMin <= 600000)) return { error: 'invalid_target' }
+  const dailyTargetMin = b.dailyTargetMin != null && Number(b.dailyTargetMin) > 0 ? Math.min(1440, Math.round(Number(b.dailyTargetMin))) : null
+  const iso = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
+  if (!iso(b.startDate) || !iso(b.endDate)) return { error: 'invalid_dates' }
+  if (b.endDate! < b.startDate!) return { error: 'end_before_start' }
+  return { title, targetMin, dailyTargetMin, startDate: b.startDate!, endDate: b.endDate! }
+}
+
 // 과목 + 순공 통계 스냅샷 (오늘/주/월)
 studyRoutes.get('/family/:familyId/study', async (c) => {
   const db = c.env.DB
@@ -108,6 +120,30 @@ studyRoutes.get('/family/:familyId/study', async (c) => {
   if (!dset.has(cur)) cur = addDays(cur, -1)
   for (let i = 0; i < 400 && dset.has(cur); i++) { streak++; cur = addDays(cur, -1) }
 
+  // 순공 기간 누적목표 (예: 방학 200h) — 기간 내 세션 자동 합산 + 페이스
+  const dayMs = 86400000
+  const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / dayMs)
+  const sgRows = (await db.prepare('SELECT id, title, target_min, daily_target_min, start_date, end_date FROM study_goals WHERE child_id = ? ORDER BY created_at')
+    .bind(childId).all<{ id: string; title: string; target_min: number; daily_target_min: number | null; start_date: string; end_date: string }>()).results
+  const studyGoals = []
+  for (const g of sgRows) {
+    const acc = (await db.prepare('SELECT COALESCE(SUM(minutes),0) AS m FROM study_sessions WHERE child_id = ? AND the_date >= ? AND the_date <= ?')
+      .bind(childId, g.start_date, g.end_date).first<{ m: number }>())?.m ?? 0
+    const daysTotal = Math.max(1, days(g.start_date, g.end_date) + 1)
+    const daysElapsed = Math.min(daysTotal, Math.max(0, days(g.start_date, date) + 1))
+    const daysLeft = date <= g.end_date ? Math.max(0, days(date, g.end_date)) : -1
+    const daysLeftIncl = date <= g.end_date ? days(date, g.end_date) + 1 : 0
+    const expected = Math.round(g.target_min * Math.min(1, daysElapsed / daysTotal))
+    const remaining = Math.max(0, g.target_min - acc)
+    studyGoals.push({
+      id: g.id, title: g.title, targetMin: g.target_min, dailyTargetMin: g.daily_target_min ?? null,
+      startDate: g.start_date, endDate: g.end_date, accumulatedMin: acc,
+      progress: Math.min(100, Math.round((acc / g.target_min) * 100)),
+      daysTotal, daysElapsed, daysLeft, expectedMin: expected, aheadMin: acc - expected,
+      recommendedDailyMin: daysLeftIncl > 0 ? Math.ceil(remaining / daysLeftIncl) : 0,
+    })
+  }
+
   return c.json({
     date,
     subjects: subs,
@@ -115,7 +151,48 @@ studyRoutes.get('/family/:familyId/study', async (c) => {
     week: { start: weekStart, end: weekEnd, total: weekTotal, maxMin: weekMax, days: weekDays },
     month: { label: date.slice(0, 7), start: monthStart, end: monthEnd, total: monthTotal, maxMin: monthMax, days: monthDays },
     streak,
+    goals: studyGoals,
   })
+})
+
+// 순공 목표 생성
+studyRoutes.post('/study/goals', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{ childId?: string; title?: string; targetMin?: number; dailyTargetMin?: number; startDate?: string; endDate?: string }>()
+  const ok = await authForChild(db, c.req.header('Cookie') ?? null, body.childId ?? '')
+  if (!ok) return c.json({ error: 'unauthorized' }, 401)
+  const v = validateGoal(body)
+  if ('error' in v) return c.json({ error: v.error }, 400)
+  const id = randomId('sg')
+  await db.prepare('INSERT INTO study_goals (id, family_id, child_id, title, target_min, daily_target_min, start_date, end_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, ok.familyId, body.childId, v.title, v.targetMin, v.dailyTargetMin, v.startDate, v.endDate, Date.now()).run()
+  return c.json({ ok: true, id })
+})
+
+// 순공 목표 수정
+studyRoutes.put('/study/goals/:id', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const g = await db.prepare('SELECT child_id FROM study_goals WHERE id = ?').bind(id).first<{ child_id: string }>()
+  if (!g) return c.json({ error: 'not_found' }, 404)
+  if (!(await authForChild(db, c.req.header('Cookie') ?? null, g.child_id))) return c.json({ error: 'unauthorized' }, 401)
+  const body = await c.req.json<{ title?: string; targetMin?: number; dailyTargetMin?: number; startDate?: string; endDate?: string }>()
+  const v = validateGoal(body)
+  if ('error' in v) return c.json({ error: v.error }, 400)
+  await db.prepare('UPDATE study_goals SET title = ?, target_min = ?, daily_target_min = ?, start_date = ?, end_date = ? WHERE id = ?')
+    .bind(v.title, v.targetMin, v.dailyTargetMin, v.startDate, v.endDate, id).run()
+  return c.json({ ok: true })
+})
+
+// 순공 목표 삭제
+studyRoutes.delete('/study/goals/:id', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const g = await db.prepare('SELECT child_id FROM study_goals WHERE id = ?').bind(id).first<{ child_id: string }>()
+  if (!g) return c.json({ error: 'not_found' }, 404)
+  if (!(await authForChild(db, c.req.header('Cookie') ?? null, g.child_id))) return c.json({ error: 'unauthorized' }, 401)
+  await db.prepare('DELETE FROM study_goals WHERE id = ?').bind(id).run()
+  return c.json({ ok: true })
 })
 
 // 학습 세션 저장

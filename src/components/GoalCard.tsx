@@ -10,6 +10,8 @@ function recurLabel(sp: ScheduleItem): string {
   if (sp.recur === 'days') return sp.recurDays.map((d) => WD[d]).join('·') || '요일'
   return '매일'
 }
+const md = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`
+function dDayLabel(d: number): string { return d > 0 ? `D-${d}` : d === 0 ? '오늘까지' : '기간 지남' }
 
 /** 목표 카드 — 여정(목적지) + 그 아래 하위 계획(매일 실천)을 중첩해 담는다.
  *  하위 실천을 해낼수록 위 여정이 채워진다(진행률 자동 롤업). */
@@ -30,7 +32,9 @@ export function GoalCard({ goal, canManage, onEditGoal, onDeleteGoal, onAddSub, 
           <span className="t">{goal.title}</span>
           <span className="tmeta">
             <span className={`who ${goal.author}`}>{AUTHOR_LABEL[goal.author]}</span>
-            <span className="period-tag">{goal.period === 'week' ? '주간' : '월간'}</span>
+            {goal.endDate
+              ? <span className="period-tag">{goal.startDate ? `${md(goal.startDate)}~` : ''}{md(goal.endDate)}{typeof goal.dDay === 'number' ? ` · ${dDayLabel(goal.dDay)}` : ''}</span>
+              : <span className="period-tag">{goal.period === 'week' ? '주간' : '월간'}</span>}
             {goal.autoProgress && <span className="auto-tag">자동</span>}
           </span>
         </span>

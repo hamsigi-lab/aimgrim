@@ -21,11 +21,13 @@ export interface TaskRow {
   progress: number; progress_label: string | null; done: number | null; approved: number | null
   recur?: string | null; goal_id?: string | null; recur_days?: number | null
   note?: string | null; minutes?: number | null
+  start_date?: string | null; end_date?: string | null
 }
 
-/** recur/시작일 기준으로 [aStart, aEnd] 범위에서 이 할일이 나타나는 날 수 */
-export function occurrencesInRange(recur: string, startISO: string, aStart: string, aEnd: string, recurDaysMask = 0): number {
+/** recur/시작일 기준으로 [aStart, aEnd] 범위에서 이 할일이 나타나는 날 수 (endISO가 있으면 그날까지만) */
+export function occurrencesInRange(recur: string, startISO: string, aStart: string, aEnd: string, recurDaysMask = 0, endISO?: string | null): number {
   const from = startISO > aStart ? startISO : aStart
+  if (endISO && endISO < aEnd) aEnd = endISO
   if (from > aEnd) return 0
   if (recur === 'once') return startISO >= aStart && startISO <= aEnd ? 1 : 0
   let count = 0
@@ -70,12 +72,13 @@ export function maxPoints(period: string): number {
 // recur: once(그날) / daily(매일) / weekdays(평일) / days(특정 요일 = recur_days 비트마스크)
 // 사용: `AND ${DAY_RECUR_SQL}` + 바인딩에 dayRecurBinds(date, isWeekday, dayBit) 삽입
 export const DAY_RECUR_SQL =
-  "((t.recur = 'once' AND t.the_date = ?)" +
+  "(((t.recur = 'once' AND t.the_date = ?)" +
   " OR (t.recur = 'daily' AND t.the_date <= ?)" +
   " OR (t.recur = 'weekdays' AND t.the_date <= ? AND ? = 1)" +
-  " OR (t.recur = 'days' AND t.the_date <= ? AND (COALESCE(t.recur_days,0) & ?) != 0))"
-export function dayRecurBinds(date: string, isWeekday: number, dayBit: number): [string, string, string, number, string, number] {
-  return [date, date, date, isWeekday, date, dayBit]
+  " OR (t.recur = 'days' AND t.the_date <= ? AND (COALESCE(t.recur_days,0) & ?) != 0))" +
+  " AND (t.end_date IS NULL OR t.end_date >= ?))" // 종료일 이후엔 계획에 안 나타남
+export function dayRecurBinds(date: string, isWeekday: number, dayBit: number): [string, string, string, number, string, number, string] {
+  return [date, date, date, isWeekday, date, dayBit, date]
 }
 export function isWeekdayOf(date: string): number {
   const dow = new Date(date + 'T00:00:00Z').getUTCDay()

@@ -37,6 +37,10 @@ export interface ScheduleItem {
   note?: string
   /** 완료 기록 — 소요 시간(분, 선택) */
   minutes?: number
+  /** 목표 실천 기간 시작 (YYYY-MM-DD) */
+  startDate?: string | null
+  /** 목표 실천 기간 종료 / 하루 할일 반복 종료 (YYYY-MM-DD) */
+  endDate?: string | null
 }
 
 /** 목표(주/월) — 그 아래 하위 계획(daily 실천)을 중첩해 담는다 */
@@ -45,6 +49,8 @@ export interface GoalItem extends ScheduleItem {
   period: 'week' | 'month'
   /** 이 목표를 이루기 위한 하루 실천들 (goal_id로 연결된 day 할일) */
   subplans: ScheduleItem[]
+  /** 종료일까지 남은 일수 (end_date 있을 때). 오늘=0, 지남=음수 */
+  dDay?: number | null
 }
 
 /** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */

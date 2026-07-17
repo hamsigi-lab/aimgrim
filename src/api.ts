@@ -74,6 +74,10 @@ export interface TaskInput {
   date?: string
   /** 연결할 주/월 목표 id */
   goalId?: string
+  /** 목표 실천 기간 시작 (YYYY-MM-DD) */
+  startDate?: string
+  /** 목표 실천 기간 종료 / 하루 할일 반복 종료 (YYYY-MM-DD) */
+  endDate?: string
 }
 
 export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', input)
@@ -143,6 +147,12 @@ export interface Subject { id: string; name: string; color: string }
 export interface StudySession { id: string; subjectId: string | null; subjectName: string; color: string; minutes: number; note: string; taskId: string | null; createdAt: number }
 export interface SubjectMin { name: string; color: string; min: number }
 export interface StudyDay { date: string; isToday?: boolean; totalMin: number; bySubject?: SubjectMin[] }
+export interface StudyGoal {
+  id: string; title: string; targetMin: number; dailyTargetMin: number | null
+  startDate: string; endDate: string; accumulatedMin: number; progress: number
+  daysTotal: number; daysElapsed: number; daysLeft: number
+  expectedMin: number; aheadMin: number; recommendedDailyMin: number
+}
 export interface StudySnapshot {
   date: string
   subjects: Subject[]
@@ -150,6 +160,7 @@ export interface StudySnapshot {
   week: { start: string; end: string; total: number; maxMin: number; days: StudyDay[] }
   month: { label: string; start: string; end: string; total: number; maxMin: number; days: StudyDay[] }
   streak: number
+  goals: StudyGoal[]
 }
 export function getStudy(familyId: string, childId: string, date?: string): Promise<StudySnapshot> {
   const q = date ? `&date=${date}` : ''
@@ -160,3 +171,6 @@ export const createSession = (input: { childId: string; subjectId?: string | nul
 export const deleteSession = (id: string) => mutate(`/api/study/sessions/${id}`, 'DELETE')
 export const createSubject = (input: { childId: string; name: string; color: string }) => mutate<{ ok: boolean; id: string }>('/api/study/subjects', 'POST', input)
 export const deleteSubject = (id: string) => mutate(`/api/study/subjects/${id}`, 'DELETE')
+export const createStudyGoal = (input: { childId: string; title: string; targetMin: number; dailyTargetMin?: number; startDate: string; endDate: string }) => mutate<{ ok: boolean; id: string }>('/api/study/goals', 'POST', input)
+export const updateStudyGoal = (id: string, input: { title: string; targetMin: number; dailyTargetMin?: number; startDate: string; endDate: string }) => mutate(`/api/study/goals/${id}`, 'PUT', input)
+export const deleteStudyGoal = (id: string) => mutate(`/api/study/goals/${id}`, 'DELETE')

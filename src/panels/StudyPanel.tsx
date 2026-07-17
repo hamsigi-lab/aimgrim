@@ -3,8 +3,10 @@ import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import {
   getStudy, createSession, deleteSession, createSubject, DEMO_FAMILY,
-  type StudySnapshot, type Subject, type StudyDay,
+  type StudySnapshot, type Subject, type StudyDay, type StudyGoal,
 } from '../api'
+import { StudyGoalProgress } from '../components/StudyGoalProgress'
+import { StudyGoalEditor } from '../components/StudyGoalEditor'
 
 type View = 'today' | 'week' | 'month'
 const VIEWS: { id: View; label: string }[] = [
@@ -41,6 +43,7 @@ export function StudyPanel() {
   const [subject, setSubject] = useState<Subject | null>(null)
   const [pomodoro, setPomodoro] = useState(false)
   const [saveSheet, setSaveSheet] = useState<{ minutes: number } | null>(null)
+  const [goalEdit, setGoalEdit] = useState<StudyGoal | 'new' | null>(null)
   const intRef = useRef<number | null>(null)
 
   function load() { getStudy(fam, childId).then(setData).catch(() => setData(null)) }
@@ -80,6 +83,15 @@ export function StudyPanel() {
   return (
     <div className="panel">
       <div className="daterow"><span className="big">순공시간</span><span className="sub">순수하게 공부한 시간, 나의 기록 ⏱</span></div>
+
+      {/* 순공 기간 누적목표 — 한눈에 누적 달성 */}
+      {data.goals.map((g) => (
+        <StudyGoalProgress key={g.id} goal={g} todayMin={data.today.totalMin}
+          onEdit={canManage ? () => setGoalEdit(g) : undefined} />
+      ))}
+      {canManage && data.goals.length === 0 && (
+        <button type="button" className="sg-add-cta" onClick={() => setGoalEdit('new')}>＋ 방학 순공 목표 세우기 (예: 200시간)</button>
+      )}
 
       {/* 타이머 */}
       <div className="timer-card">
@@ -127,6 +139,10 @@ export function StudyPanel() {
         <SessionSaveSheet minutes={saveSheet.minutes} subject={subject} subjects={data.subjects}
           childId={childId} pomodoro={pomodoro}
           onClose={() => setSaveSheet(null)} onSaved={() => { setSaveSheet(null); load() }} />
+      )}
+      {goalEdit && (
+        <StudyGoalEditor childId={childId} today={data.date} existing={goalEdit === 'new' ? undefined : goalEdit}
+          onClose={() => setGoalEdit(null)} onSaved={() => { setGoalEdit(null); load() }} />
       )}
     </div>
   )

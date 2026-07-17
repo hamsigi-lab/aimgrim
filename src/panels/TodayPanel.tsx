@@ -6,11 +6,13 @@ import { TaskEditor } from '../components/TaskEditor'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
-import { approveTask, toggleTask as apiToggle, fetchDayTasks, DEMO_FAMILY } from '../api'
+import { approveTask, toggleTask as apiToggle, fetchDayTasks, getStudy, DEMO_FAMILY, type StudySnapshot } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
-export function TodayPanel() {
+const fh = (m: number) => `${Math.round((m / 60) * 10) / 10}시간`
+
+export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
   const { snapshot, childId, toggleTask, reload } = useApp()
   const { status, me, familyId } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem } | null>(null)
@@ -20,6 +22,7 @@ export function TodayPanel() {
   const [viewDate, setViewDate] = useState<string | null>(null)
   const [otherTasks, setOtherTasks] = useState<ScheduleItem[] | null>(null)
   const [otherBusy, setOtherBusy] = useState(false)
+  const [study, setStudy] = useState<StudySnapshot | null>(null)
 
   const fam = status === 'demo' ? DEMO_FAMILY : familyId ?? DEMO_FAMILY
   const today = snapshot?.today ?? ''
@@ -35,6 +38,9 @@ export function TodayPanel() {
       .catch(() => setOtherTasks([]))
       .finally(() => setOtherBusy(false))
   }, [date, isToday, fam, childId])
+
+  // 순공 요약(오늘 순공 + 방학 누적목표) — 계획 탭에 자동 반영
+  useEffect(() => { getStudy(fam, childId).then(setStudy).catch(() => setStudy(null)) }, [fam, childId])
 
   if (!snapshot) return null
 
@@ -86,6 +92,17 @@ export function TodayPanel() {
         </div>
         {tasks.length > 0 && <div className="ts-bar"><span className="ts-fill" style={{ width: `${pct}%` }} /></div>}
       </div>
+
+      {/* 순공 자동 요약 — 매일 순공하면 여기 자동 반영 (탭하면 순공 탭) */}
+      {isToday && study && (study.today.totalMin > 0 || study.goals.length > 0) && (
+        <button type="button" className="study-strip" onClick={onGoToStudy}>
+          <span className="ss-today">⏱ 오늘 순공 <b>{fh(study.today.totalMin)}</b></span>
+          {study.goals[0] && (
+            <span className="ss-goal">{fh(study.goals[0].accumulatedMin)}/{fh(study.goals[0].targetMin)}{study.goals[0].daysLeft >= 0 ? ` · D-${study.goals[0].daysLeft}` : ''}</span>
+          )}
+          <span className="ss-arrow" aria-hidden="true">›</span>
+        </button>
+      )}
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 

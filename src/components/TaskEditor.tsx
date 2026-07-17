@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Category, Period, Recur, ScheduleItem } from '../types'
 import { createTask, updateTask, deleteTask } from '../api'
 import { useApp } from '../state/store'
+import { mondayISO, shiftISO } from '../lib/calendar'
 
 const RECURS: { id: Recur; label: string }[] = [
   { id: 'daily', label: '매일' },
@@ -20,7 +21,15 @@ const CATS: { id: Category; label: string; emoji: string }[] = [
 
 const PERIOD_LABEL: Record<Period, string> = { day: '오늘 할일', week: '이번주 목표', month: '이번달 목표' }
 
-export interface Prefill { title?: string; category?: Category; goalId?: string }
+function monthRange(iso: string): [string, string] {
+  const s = iso.slice(0, 8) + '01'
+  const d = new Date(iso + 'T00:00:00Z')
+  const e = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
+  return [s, e]
+}
+function weekRange(iso: string): [string, string] { const m = mondayISO(iso); return [m, shiftISO(m, 6)] }
+
+export interface Prefill { title?: string; category?: Category; goalId?: string; endDate?: string }
 
 interface Props {
   childId: string
@@ -38,6 +47,9 @@ interface Props {
 export function TaskEditor({ childId, period, existing, targetDate, defaultRecur, prefill, onClose, onSaved }: Props) {
   const { snapshot } = useApp()
   const editing = !!existing
+  const isGoal = period !== 'day'
+  const today = snapshot?.today ?? new Date().toISOString().slice(0, 10)
+
   const [title, setTitle] = useState(existing?.title ?? prefill?.title ?? '')
   const [category, setCategory] = useState<Category>(existing?.category ?? prefill?.category ?? 'study')
   const [points, setPoints] = useState(existing?.points ?? (period === 'day' ? 10 : 40))
@@ -47,23 +59,38 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
   const [recur, setRecur] = useState<Recur>(existing?.recur ?? defaultRecur ?? 'daily')
   const [recurDays, setRecurDays] = useState<number[]>(existing?.recurDays ?? [])
   const [goalId, setGoalId] = useState<string | null>(existing?.goalId ?? prefill?.goalId ?? null)
-  const [per, setPer] = useState<'week' | 'month'>(period === 'month' ? 'month' : 'week')
+
+  // 목표 실천 기간 (시작~종료). 기본: period가 week면 이번주, 아니면 이번달
+  const initRange: [string, string] = existing?.startDate && existing?.endDate
+    ? [existing.startDate, existing.endDate]
+    : (period === 'week' ? weekRange(today) : monthRange(today))
+  const [gStart, setGStart] = useState(initRange[0])
+  const [gEnd, setGEnd] = useState(initRange[1])
+  const [per, setPer] = useState<'week' | 'month'>(period === 'week' ? 'week' : 'month')
+  // 하루 할일 반복 종료일 (언제까지)
+  const [tEnd, setTEnd] = useState(existing?.endDate ?? prefill?.endDate ?? '')
+
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const isGoal = period !== 'day'
 
-  // 하루 할일이 연결할 수 있는 목표들 (전체)
+  function preset(kind: 'week' | 'month') {
+    const [s, e] = kind === 'week' ? weekRange(today) : monthRange(today)
+    setGStart(s); setGEnd(e); setPer(kind)
+  }
+
   const goalOptions = snapshot?.goals ?? [...(snapshot?.weekGoals ?? []), ...(snapshot?.monthGoal ? [snapshot.monthGoal] : [])]
 
   async function save() {
     if (!title.trim()) return
+    if (isGoal && gStart && gEnd && gEnd < gStart) { setErr('종료일이 시작일보다 빨라요.'); return }
     setBusy(true); setErr(null)
     try {
       const rd = recur === 'days' ? recurDays : undefined
+      const goalDates = isGoal ? { startDate: gStart || undefined, endDate: gEnd || undefined } : { endDate: tEnd || undefined }
       if (editing) {
-        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined })
+        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined, ...goalDates })
       } else {
-        await createTask({ childId, title: title.trim(), category, period: isGoal ? per : 'day', points, timeLabel, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined })
+        await createTask({ childId, title: title.trim(), category, period: isGoal ? per : 'day', points, timeLabel, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined, ...goalDates })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }
@@ -80,7 +107,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="일정 편집">
         <div className="grip" />
-        <h3>{editing ? '일정 고치기' : isGoal ? '목표 추가' : `${PERIOD_LABEL[period]} 추가`}</h3>
+        <h3>{editing ? '일정 고치기' : isGoal ? '목표 세우기' : `${PERIOD_LABEL[period]} 추가`}</h3>
         <div className="form" style={{ marginTop: 12 }}>
           {err && <div className="formerr">{err}</div>}
           <div className="field">
@@ -100,13 +127,19 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
             </div>
           </div>
 
-          {isGoal && !editing && (
+          {isGoal && (
             <div className="field">
-              <label>목표 기간</label>
+              <label>실천 기간 · 언제까지</label>
               <div className="seg">
-                <button type="button" className={per === 'week' ? 'on' : ''} onClick={() => setPer('week')}>이번주</button>
-                <button type="button" className={per === 'month' ? 'on' : ''} onClick={() => setPer('month')}>이번달</button>
+                <button type="button" className={per === 'week' ? 'on' : ''} onClick={() => preset('week')}>이번주</button>
+                <button type="button" className={per === 'month' ? 'on' : ''} onClick={() => preset('month')}>이번달</button>
               </div>
+              <div className="daterange">
+                <input type="date" value={gStart} onChange={(e) => { setGStart(e.target.value); setPer('month') }} />
+                <span>~</span>
+                <input type="date" value={gEnd} onChange={(e) => { setGEnd(e.target.value); setPer('month') }} />
+              </div>
+              <span className="hint">이 기간 동안 계획에서 실천을 확인해요. 방학처럼 직접 정할 수 있어요.</span>
             </div>
           )}
 
@@ -137,6 +170,13 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                   </div>
                 )}
               </div>
+              {recur !== 'once' && (
+                <div className="field">
+                  <label htmlFor="t-end">언제까지 반복 (선택)</label>
+                  <input id="t-end" type="date" value={tEnd} onChange={(e) => setTEnd(e.target.value)} />
+                  <span className="hint">비워두면 계속 반복돼요. 목표 기간에 맞추면 그날까지만 나와요.</span>
+                </div>
+              )}
               <div className="field">
                 <label htmlFor="t-time">언제 (선택)</label>
                 <input id="t-time" value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="예: 오후 4시, 자기 전" maxLength={20} />
@@ -158,7 +198,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                 <label htmlFor="t-prog">진행률: {progress}%</label>
                 <input id="t-prog" type="range" min={0} max={100} step={5} value={progress}
                   onChange={(e) => setProgress(Number(e.target.value))} className="range" />
-                <span className="hint">연결된 할일이 있으면 진행률은 완료율로 자동 계산돼요. (연결 없을 때만 수동)</span>
+                <span className="hint">연결된 실천이 있으면 진행률은 완료율로 자동 계산돼요. (연결 없을 때만 수동)</span>
               </div>
               <div className="field">
                 <label htmlFor="t-plab">진행 메모 (선택)</label>

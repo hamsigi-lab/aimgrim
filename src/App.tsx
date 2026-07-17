@@ -132,7 +132,7 @@ function Shell() {
       <main className="body" ref={bodyRef}>
         {floatKey > 0 && <div className="float go" key={floatKey} aria-hidden="true">+{lastGain}</div>}
         {tab === 'goals' && <GoalsPanel />}
-        {tab === 'plan' && planView === 'day' && <TodayPanel />}
+        {tab === 'plan' && planView === 'day' && <TodayPanel onGoToStudy={() => go('study')} />}
         {tab === 'plan' && planView === 'week' && <WeekPanel onGoToGoals={() => go('goals')} />}
         {tab === 'plan' && planView === 'month' && <MonthPanel onOpenDay={() => goPlan('day')} onGoToGoals={() => go('goals')} />}
         {tab === 'study' && <StudyPanel />}
