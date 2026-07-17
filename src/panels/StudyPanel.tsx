@@ -25,6 +25,12 @@ function clock(sec: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
+// 진행 중인 타이머를 localStorage에 보존 → 탭 전환·앱 종료해도 시작 시각 기준으로 이어짐
+interface TimerState { baseSec: number; startedAt: number | null; subjectId: string | null; pomodoro: boolean }
+function readTimer(key: string): TimerState | null {
+  try { return JSON.parse(localStorage.getItem(key) || 'null') } catch { return null }
+}
+
 /** 순공시간 탭 — 정직한 스톱워치(순공 실측) + 과목 기록 + 오늘/주/월 시각화.
  *  순위·경쟁 없음, '나의 기록·성취'로. 시간엔 별점 미지급. */
 export function StudyPanel() {
@@ -36,12 +42,13 @@ export function StudyPanel() {
   const [data, setData] = useState<StudySnapshot | null>(null)
   const [view, setView] = useState<View>('today')
 
-  // 타이머 상태 (정직한 스톱워치: 일시정지 시 순공에서 제외)
-  const [baseSec, setBaseSec] = useState(0)
-  const [startedAt, setStartedAt] = useState<number | null>(null) // 진행 중이면 ms
+  // 타이머 상태 (정직한 스톱워치: 일시정지 시 순공에서 제외). localStorage에 보존해 창을 닫아도 이어짐
+  const STORE_KEY = `aimgrim_timer_${childId}`
+  const [baseSec, setBaseSec] = useState(() => readTimer(STORE_KEY)?.baseSec ?? 0)
+  const [startedAt, setStartedAt] = useState<number | null>(() => readTimer(STORE_KEY)?.startedAt ?? null) // 진행 중이면 ms
   const [tick, setTick] = useState(0)
   const [subject, setSubject] = useState<Subject | null>(null)
-  const [pomodoro, setPomodoro] = useState(false)
+  const [pomodoro, setPomodoro] = useState(() => readTimer(STORE_KEY)?.pomodoro ?? false)
   const [saveSheet, setSaveSheet] = useState<{ minutes: number } | null>(null)
   const [goalEdit, setGoalEdit] = useState<StudyGoal | 'new' | null>(null)
   const intRef = useRef<number | null>(null)
@@ -49,10 +56,20 @@ export function StudyPanel() {
   function load() { getStudy(fam, childId).then(setData).catch(() => setData(null)) }
   useEffect(load, [fam, childId])
 
-  // 기본 과목 선택
+  // 기본 과목 선택 (진행 중이던 타이머의 과목을 우선 복원)
   useEffect(() => {
-    if (!subject && data?.subjects.length) setSubject(data.subjects[0])
-  }, [data, subject])
+    if (subject || !data?.subjects.length) return
+    const savedId = readTimer(STORE_KEY)?.subjectId
+    setSubject(data.subjects.find((s) => s.id === savedId) ?? data.subjects[0])
+  }, [data, subject, STORE_KEY])
+
+  // 타이머 상태를 localStorage에 보존 (없으면 삭제)
+  useEffect(() => {
+    try {
+      if (baseSec === 0 && startedAt === null) localStorage.removeItem(STORE_KEY)
+      else localStorage.setItem(STORE_KEY, JSON.stringify({ baseSec, startedAt, subjectId: subject?.id ?? null, pomodoro }))
+    } catch { /* localStorage 불가 환경 무시 */ }
+  }, [baseSec, startedAt, subject, pomodoro, STORE_KEY])
 
   const active = startedAt !== null
   const elapsedSec = baseSec + (active ? Math.floor((Date.now() - startedAt!) / 1000) : 0)

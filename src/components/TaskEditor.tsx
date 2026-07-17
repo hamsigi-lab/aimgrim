@@ -69,6 +69,8 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
   const [per, setPer] = useState<'week' | 'month'>(period === 'week' ? 'week' : 'month')
   // 하루 할일 반복 종료일 (언제까지)
   const [tEnd, setTEnd] = useState(existing?.endDate ?? prefill?.endDate ?? '')
+  // 목표를 오늘 할일에 매일 체크 항목으로 자동 추가
+  const [autoDaily, setAutoDaily] = useState(true)
 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -86,7 +88,7 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
     setBusy(true); setErr(null)
     try {
       const rd = recur === 'days' ? recurDays : undefined
-      const goalDates = isGoal ? { startDate: gStart || undefined, endDate: gEnd || undefined } : { endDate: tEnd || undefined }
+      const goalDates = isGoal ? { startDate: gStart || undefined, endDate: gEnd || undefined, autoDaily } : { endDate: tEnd || undefined }
       if (editing) {
         await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined, ...goalDates })
       } else {
@@ -140,6 +142,10 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                 <input type="date" value={gEnd} onChange={(e) => { setGEnd(e.target.value); setPer('month') }} />
               </div>
               <span className="hint">이 기간 동안 계획에서 실천을 확인해요. 방학처럼 직접 정할 수 있어요.</span>
+              <label className="checkrow">
+                <input type="checkbox" checked={autoDaily} onChange={(e) => setAutoDaily(e.target.checked)} />
+                <span>오늘 할일에 매일 체크 항목으로 넣기</span>
+              </label>
             </div>
           )}
 

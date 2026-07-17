@@ -352,7 +352,7 @@ scheduleRoutes.post('/tasks', async (c) => {
     childId?: string; title?: string; category?: string; period?: string
     points?: number; timeLabel?: string; progress?: number; progressLabel?: string
     recur?: string; recurDays?: number[]; date?: string; goalId?: string
-    startDate?: string; endDate?: string
+    startDate?: string; endDate?: string; autoDaily?: boolean
   }>()
   const childId = body.childId ?? ''
   const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
@@ -391,8 +391,23 @@ scheduleRoutes.post('/tasks', async (c) => {
     progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, gStart, tEnd, order?.n ?? 1, now,
   ).run()
 
+  // 목표를 세우면 같은 이름의 '매일 실천'을 오늘 할일에 자동 추가 → 체크 가능·목표에 롤업
+  if (period !== 'day' && (body.autoDaily ?? true)) {
+    await createGoalPractice(db, auth.session.family_id, childId, auth.session.member_id, id, title, category, gStart ?? theDate, tEnd, now)
+  }
+
   return c.json({ ok: true, id })
 })
+
+/** 목표에 연결된 '매일 실천' 하루 할일을 만든다 (기간 동안 오늘 할일에 체크로 나타남) */
+async function createGoalPractice(db: D1Database, familyId: string, childId: string, authorId: string, goalId: string, title: string, category: string, startISO: string, endISO: string | null, now: number) {
+  const pid = randomId('task')
+  const pOrder = (await db.prepare("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM tasks WHERE child_id = ? AND period = 'day'").bind(childId).first<{ n: number }>())?.n ?? 1
+  await db.prepare(
+    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, start_date, end_date, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, 'day', ?, 10, ?, NULL, 0, NULL, 'daily', NULL, ?, NULL, ?, ?, ?)`,
+  ).bind(pid, familyId, childId, title, category, authorId, startISO, goalId, endISO, pOrder, now).run()
+}
 
 // 일정 수정 (자녀는 본인 작성분만)
 scheduleRoutes.put('/tasks/:id', async (c) => {
@@ -405,7 +420,7 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
   if (auth.session.role === 'child' && task.author_id !== auth.session.member_id) return c.json({ error: 'forbidden' }, 403)
 
-  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; recurDays?: number[]; goalId?: string; startDate?: string; endDate?: string }>()
+  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; recurDays?: number[]; goalId?: string; startDate?: string; endDate?: string; autoDaily?: boolean }>()
   const title = (body.title ?? '').trim()
   const category = body.category ?? 'life'
   if (!title || !CATEGORIES.has(category)) return c.json({ error: 'invalid_field' }, 400)
@@ -428,6 +443,12 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   if (task.period !== 'day' && (title !== task.title || category !== task.category)) {
     await db.prepare("UPDATE tasks SET title = ?, category = ? WHERE goal_id = ? AND period = 'day' AND title = ?")
       .bind(title, category, taskId, task.title).run()
+  }
+
+  // 목표 수정 시, '오늘 할일로 넣기'가 켜져 있고 연결된 매일 실천이 하나도 없으면 자동 생성 (기존 목표 반영)
+  if (task.period !== 'day' && (body.autoDaily ?? false)) {
+    const cnt = (await db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE goal_id = ? AND period = 'day'").bind(taskId).first<{ n: number }>())?.n ?? 0
+    if (cnt === 0) await createGoalPractice(db, task.family_id, task.child_id, auth.session.member_id, taskId, title, category, gStart ?? familyDate(task.family_id), tEnd, Date.now())
   }
 
   return c.json({ ok: true })

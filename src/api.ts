@@ -78,6 +78,8 @@ export interface TaskInput {
   startDate?: string
   /** 목표 실천 기간 종료 / 하루 할일 반복 종료 (YYYY-MM-DD) */
   endDate?: string
+  /** 목표 생성/수정 시 같은 이름의 '매일 실천'을 오늘 할일에 자동 추가 */
+  autoDaily?: boolean
 }
 
 export const createTask = (input: TaskInput) => mutate('/api/tasks', 'POST', input)

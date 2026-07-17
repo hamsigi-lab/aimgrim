@@ -609,6 +609,8 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .daterange input { flex: 1; min-width: 0; }
 .daterange span { color: var(--ink-faint); font-weight: 800; }
 .period-tag { white-space: nowrap; }
+.checkrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ink-soft); cursor: pointer; }
+.checkrow input { width: 18px; height: 18px; accent-color: var(--mint); flex: 0 0 18px; }
 
 /* ── 순공시간 탭 ── */
 .timer-card { background: linear-gradient(180deg, var(--mint-wash), #fff); border: 1.5px solid #CDE8E0; border-radius: 20px; padding: 16px 14px; margin-bottom: 14px; }
