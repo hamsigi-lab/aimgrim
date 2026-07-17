@@ -6,7 +6,7 @@ import type { Snapshot } from '../types'
 const fh = (m: number) => (m <= 0 ? '0분' : m < 60 ? `${m}분` : `${Math.round((m / 60) * 10) / 10}시간`)
 const AUTHOR: Record<string, string> = { me: '스스로', mom: '엄마', dad: '아빠' }
 
-/** 부모용 — 자녀의 오늘 활동을 한눈에 보는 모니터 화면 (읽기 전용). */
+/** 부모용 — 자녀의 오늘 활동 + 목표 실천 단계를 한눈에 보는 모니터 화면 (읽기 전용). */
 export function ActivityView({ childId, name, onBack, onManage }: {
   childId: string
   name: string
@@ -27,10 +27,7 @@ export function ActivityView({ childId, name, onBack, onManage }: {
   const goals = snap?.goals ?? []
   const doneTasks = tasks.filter((t) => t.done)
   const leftTasks = tasks.filter((t) => !t.done)
-  const doneGoals = goals.filter((g) => g.todayDone)
-  const leftGoals = goals.filter((g) => !g.todayDone)
   const sessions = study?.today.sessions ?? []
-  const nothingDone = doneTasks.length === 0 && doneGoals.length === 0 && sessions.length === 0
 
   return (
     <div className="app">
@@ -51,33 +48,40 @@ export function ActivityView({ childId, name, onBack, onManage }: {
             {/* 요약 */}
             <div className="av-sum">
               <div className="av-stat"><b>{doneTasks.length}/{tasks.length}</b><span>할일</span></div>
-              <div className="av-stat"><b>{doneGoals.length}/{goals.length}</b><span>목표</span></div>
+              <div className="av-stat"><b>{goals.filter((g) => g.todayDone).length}/{goals.length}</b><span>목표</span></div>
               <div className="av-stat"><b>{fh(study?.today.totalMin ?? 0)}</b><span>순공</span></div>
               <div className="av-stat"><b>{snap.child.points}</b><span>별점</span></div>
             </div>
             {snap.streak > 0 && <div className="av-streak">🔥 {snap.streak}일 연속 실천 중</div>}
 
-            {/* 오늘 한 일 */}
-            <div className="sechead" style={{ marginTop: 18 }}><h3>✅ 오늘 해낸 것</h3></div>
-            {nothingDone && <p className="empty-hint">아직 오늘 활동 기록이 없어요.</p>}
+            {/* 목표 실천 단계 */}
+            {goals.length > 0 && (
+              <>
+                <div className="sechead" style={{ marginTop: 18 }}><h3>🎯 목표 실천 단계</h3></div>
+                {goals.map((g) => (
+                  <div key={g.id} className="av-goal">
+                    <div className="av-gh">
+                      <span className={`pg-dot ${g.category}`} aria-hidden="true" />
+                      <span className="av-gt">{g.title}</span>
+                      <span className={`av-gchk${g.todayDone ? ' done' : ''}`}>{g.todayDone ? '오늘 ✓' : '오늘 ○'}</span>
+                      {typeof g.dDay === 'number' && g.dDay >= 0 && <span className="av-dday">D-{g.dDay}</span>}
+                    </div>
+                    <div className="av-gbar"><i style={{ width: `${g.progress}%` }} /></div>
+                    <div className="av-gmeta">{g.progress}% 달성{g.todayNote ? ` · 📝 ${g.todayNote}` : ''}</div>
+                  </div>
+                ))}
+              </>
+            )}
 
-            {doneGoals.map((g) => (
-              <div key={g.id} className="av-item">
-                <span className={`cat ${g.category}`} aria-hidden="true" />
-                <span className="av-mid">
-                  <span className="av-t">🎯 {g.title}</span>
-                  {g.todayNote ? <span className="av-note">{g.todayNote}</span> : <span className="av-sub">목표 실천 체크</span>}
-                </span>
-              </div>
-            ))}
+            {/* 오늘 해낸 것 (할일·순공) */}
+            <div className="sechead" style={{ marginTop: 18 }}><h3>✅ 오늘 해낸 것</h3></div>
+            {doneTasks.length === 0 && sessions.length === 0 && <p className="empty-hint">아직 오늘 완료한 할일·순공 기록이 없어요.</p>}
             {doneTasks.map((t) => (
               <div key={t.id} className="av-item">
                 <span className={`cat ${t.category}`} aria-hidden="true" />
                 <span className="av-mid">
                   <span className="av-t">{t.title}{t.approved && <em className="av-ok">💛 확인함</em>}</span>
-                  <span className="av-sub">
-                    {t.note ? `📝 ${t.note}` : `${AUTHOR[t.author]} 계획`}{typeof t.minutes === 'number' && t.minutes > 0 ? ` · ${t.minutes}분` : ''}
-                  </span>
+                  <span className="av-sub">{t.note ? `📝 ${t.note}` : `${AUTHOR[t.author]} 계획`}{typeof t.minutes === 'number' && t.minutes > 0 ? ` · ${t.minutes}분` : ''}</span>
                 </span>
                 <span className="av-pts">+{t.points}⭐</span>
               </div>
@@ -92,17 +96,10 @@ export function ActivityView({ childId, name, onBack, onManage }: {
               </div>
             ))}
 
-            {/* 아직 남은 것 */}
-            {(leftTasks.length > 0 || leftGoals.length > 0) && (
+            {/* 아직 남은 할일 */}
+            {leftTasks.length > 0 && (
               <>
-                <div className="sechead" style={{ marginTop: 18 }}><h3>⏳ 아직 남은 것</h3></div>
-                {leftGoals.map((g) => (
-                  <div key={g.id} className="av-item left">
-                    <span className="av-circle" aria-hidden="true" />
-                    <span className="av-mid"><span className="av-t">🎯 {g.title}</span></span>
-                    {typeof g.dDay === 'number' && g.dDay >= 0 && <span className="av-dday">D-{g.dDay}</span>}
-                  </div>
-                ))}
+                <div className="sechead" style={{ marginTop: 18 }}><h3>⏳ 아직 남은 할일</h3></div>
                 {leftTasks.map((t) => (
                   <div key={t.id} className="av-item left">
                     <span className="av-circle" aria-hidden="true" />
@@ -120,7 +117,7 @@ export function ActivityView({ childId, name, onBack, onManage }: {
                 <div className="av-sg">
                   <div className="av-sgtop"><span>{study.goals[0].title}</span><b>{fh(study.goals[0].accumulatedMin)} / {fh(study.goals[0].targetMin)}</b></div>
                   <div className="av-sgbar"><i style={{ width: `${study.goals[0].progress}%` }} /></div>
-                  <span className="av-sgmeta">{study.goals[0].progress}% · 이번주 {fh(study.week.total)} · {study.goals[0].daysLeft >= 0 ? `D-${study.goals[0].daysLeft}` : '완료'}</span>
+                  <span className="av-sgmeta">{study.goals[0].progress}% · 오늘 {fh(study.today.totalMin)} · 이번주 {fh(study.week.total)} · {study.goals[0].daysLeft >= 0 ? `D-${study.goals[0].daysLeft}` : '완료'}</span>
                 </div>
               </>
             )}
@@ -134,6 +131,10 @@ export function ActivityView({ childId, name, onBack, onManage }: {
                 ))}
               </>
             )}
+
+            <div className="add-row" style={{ marginTop: 18 }}>
+              <button type="button" className="add-btn" onClick={onManage}>이 아이 화면 열기 (관리·격려)</button>
+            </div>
           </>
         )}
       </main>
