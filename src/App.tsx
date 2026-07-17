@@ -34,6 +34,12 @@ const PLAN_SEG: { id: PlanView; label: string }[] = [
   { id: 'month', label: '월' },
 ]
 
+// 마지막으로 보던 화면(탭·뷰)을 저장해, 앱을 내렸다 다시 열어도 그 화면으로 복원
+const NAV_KEY = 'aimgrim_nav'
+function readNav(): { tab?: BottomTab; planView?: PlanView } | null {
+  try { return JSON.parse(localStorage.getItem(NAV_KEY) || 'null') } catch { return null }
+}
+
 function Splash() {
   return (
     <div className="app">
@@ -49,8 +55,8 @@ function Shell() {
   const { loading, error, snapshot, points, celebrateTick, lastGain, reload, surprise, clearSurprise } = useApp()
   const { status, exitDemo, exitToHome, me } = useAuth()
   const isParent = status !== 'demo' && me?.member?.role === 'parent'
-  const [tab, setTab] = useState<BottomTab>('plan')
-  const [planView, setPlanView] = useState<PlanView>('day')
+  const [tab, setTab] = useState<BottomTab>(() => { const t = readNav()?.tab; return NAV.some((n) => n.id === t) ? t! : 'plan' })
+  const [planView, setPlanView] = useState<PlanView>(() => { const v = readNav()?.planView; return PLAN_SEG.some((s) => s.id === v) ? v! : 'day' })
   const [bump, setBump] = useState(false)
   const [floatKey, setFloatKey] = useState(0)
   const [celebrating, setCelebrating] = useState(false)
@@ -67,6 +73,11 @@ function Shell() {
     const t2 = window.setTimeout(() => setCelebrating(false), 700)
     return () => { window.clearTimeout(t1); window.clearTimeout(t2) }
   }, [celebrateTick])
+
+  // 탭·뷰가 바뀔 때마다 저장 (다시 열면 이 화면으로 복원)
+  useEffect(() => {
+    try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab, planView })) } catch { /* 무시 */ }
+  }, [tab, planView])
 
   function go(next: BottomTab) {
     setTab(next)
