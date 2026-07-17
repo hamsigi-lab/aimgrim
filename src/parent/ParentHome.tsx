@@ -4,6 +4,7 @@ import { getOverview, type ChildOverview } from '../api'
 import { Mascot } from '../components/Mascot'
 import { MenuSheet } from '../components/MenuSheet'
 import { AddChildForm } from '../onboarding/AddChildForm'
+import { ActivityView } from './ActivityView'
 
 const fh = (m: number) => (m < 60 ? `${m}분` : `${Math.round((m / 60) * 10) / 10}시간`)
 
@@ -12,9 +13,15 @@ export function ParentHome() {
   const [overview, setOverview] = useState<ChildOverview[] | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [viewChild, setViewChild] = useState<{ id: string; name: string } | null>(null)
 
   const load = () => { if (familyId) getOverview(familyId).then((r) => setOverview(r.children)).catch(() => setOverview([])) }
   useEffect(load, [familyId])
+
+  if (viewChild) {
+    return <ActivityView childId={viewChild.id} name={viewChild.name}
+      onBack={() => { setViewChild(null); load() }} onManage={() => setActiveChild(viewChild.id)} />
+  }
 
   const parentName = me?.member?.name ?? '부모'
   const inviteCode = me?.family?.inviteCode
@@ -44,7 +51,7 @@ export function ParentHome() {
             {overview.map((ch) => {
               const pct = ch.todayTotal > 0 ? Math.round((ch.todayDone / ch.todayTotal) * 100) : 0
               return (
-                <button type="button" className="ph-card" key={ch.id} onClick={() => setActiveChild(ch.id)}>
+                <button type="button" className="ph-card" key={ch.id} onClick={() => setViewChild({ id: ch.id, name: ch.name })}>
                   <div className="ph-av" aria-hidden="true">🌱</div>
                   <div className="ph-mid">
                     <div className="ph-name">{ch.name}

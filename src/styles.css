@@ -742,6 +742,35 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .ss-goal { font-size: 12px; font-weight: 800; color: var(--mint-deep); font-variant-numeric: tabular-nums; margin-left: auto; }
 .ss-arrow { color: var(--mint-deep); font-weight: 800; font-size: 16px; }
 
+/* ── 부모: 자녀 오늘 활동 모니터 ── */
+.av-manage { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: var(--mint-deep); background: var(--mint-wash); border: none; border-radius: 100px; padding: 7px 12px; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+.av-sum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
+.av-stat { background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 11px 4px; text-align: center; }
+.av-stat b { display: block; font-family: var(--round); font-size: 18px; font-weight: 800; color: var(--mint-deep); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.av-stat span { font-size: 11px; font-weight: 700; color: var(--ink-faint); }
+.av-streak { margin-top: 10px; font-size: 12.5px; font-weight: 800; color: var(--apricot); background: var(--apricot-wash); border-radius: 100px; padding: 6px 12px; width: fit-content; }
+.av-item { display: flex; align-items: center; gap: 11px; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 11px 13px; margin-bottom: 8px; }
+.av-item.left { background: #FAFBFA; }
+.av-item .cat { width: 4px; align-self: stretch; border-radius: 100px; flex: 0 0 4px; margin: 1px 0; }
+.av-dot { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; }
+.av-circle { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; border: 2px solid var(--ink-faint); opacity: .5; }
+.av-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.av-t { font-size: 14px; font-weight: 800; color: var(--ink); }
+.av-ok { font-style: normal; font-size: 11px; font-weight: 800; color: var(--sun); margin-left: 6px; }
+.av-sub { font-size: 12px; color: var(--ink-faint); font-weight: 600; }
+.av-note { font-size: 12.5px; color: var(--mint-deep); font-weight: 700; }
+.av-pts { font-size: 12px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.av-dday { font-size: 11px; font-weight: 800; color: var(--apricot); background: var(--apricot-wash); border-radius: 100px; padding: 2px 8px; flex: 0 0 auto; }
+.av-sg { background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 13px 14px; }
+.av-sgtop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.av-sgtop span { font-size: 13.5px; font-weight: 800; color: var(--ink); }
+.av-sgtop b { font-family: var(--round); font-size: 15px; color: var(--mint-deep); font-variant-numeric: tabular-nums; }
+.av-sgbar { height: 9px; background: var(--line); border-radius: 100px; overflow: hidden; }
+.av-sgbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); border-radius: 100px; }
+.av-sgmeta { display: block; margin-top: 7px; font-size: 11.5px; font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.av-cheer { background: var(--grape-wash); border: 1.5px solid #E2D9FA; border-radius: 14px; padding: 11px 13px; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.5; }
+.av-cheer b { color: #6A55C9; font-weight: 800; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
