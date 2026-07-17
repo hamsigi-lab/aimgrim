@@ -50,7 +50,7 @@ scheduleRoutes.get('/family/:familyId/day', async (c) => {
            t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
+    WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
     ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekday, dayBitOf(date))).all<TaskRow>()
 
   return c.json({ date, tasks: rows.results.map(mapScheduleItem) })
@@ -80,7 +80,7 @@ scheduleRoutes.get('/family/:familyId/week', async (c) => {
              t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
       FROM tasks t JOIN members am ON am.id = t.author_id
       LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-      WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
+      WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
       ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date), dayBitOf(date))).all<TaskRow>()
     days.push({ date, isToday: date === today, tasks: rows.results.map(mapScheduleItem) })
   }
@@ -139,7 +139,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
            t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}
+    WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
     ORDER BY t.sort_order`).bind(date, childId, ...dayRecurBinds(date, isWeekdayOf(date), dayBitOf(date))).all<TaskRow>()
 
   const goalSql = `
@@ -149,6 +149,29 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     WHERE t.child_id = ? AND t.period = ? ORDER BY t.sort_order`
   const week = await db.prepare(goalSql).bind(childId, 'week').all<TaskRow>()
   const month = await db.prepare(goalSql).bind(childId, 'month').all<TaskRow>()
+
+  // 각 목표에 '숨은 매일 실천'(gp_)을 보장 → 계획 탭에서 목표를 매일 체크(진행률 롤업).
+  // 리스트엔 안 보이고(위 쿼리에서 제외) 목표 행의 체크로만 쓰인다. 제목·기간은 목표에 맞춰 동기화.
+  const allGoals = [...week.results, ...month.results]
+  if (allGoals.length) {
+    const now = Date.now()
+    const stmts = []
+    for (const g of allGoals) {
+      const pid = 'gp_' + g.id
+      const gpStart = g.start_date ?? date
+      stmts.push(db.prepare(
+        `INSERT OR IGNORE INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, start_date, end_date, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, 'day', ?, 10, ?, NULL, 0, NULL, 'daily', NULL, ?, NULL, ?, 0, ?)`)
+        .bind(pid, familyId, childId, g.title, g.category, g.author_id, gpStart, g.id, g.end_date ?? null, now))
+      stmts.push(db.prepare('UPDATE tasks SET title = ?, category = ?, the_date = ?, end_date = ? WHERE id = ?')
+        .bind(g.title, g.category, gpStart, g.end_date ?? null, pid))
+    }
+    await db.batch(stmts)
+  }
+  // 오늘 목표 체크 상태
+  const gpDone = new Set((await db.prepare(
+    "SELECT c.task_id AS tid FROM completions c JOIN tasks t ON t.id = c.task_id WHERE t.child_id = ? AND c.the_date = ? AND c.done = 1 AND substr(t.id,1,3) = 'gp_'")
+    .bind(childId, date).all<{ tid: string }>()).results.map((r) => r.tid))
 
   const rewards = await db
     .prepare('SELECT id, title, emoji, tone, cost, redeemed_at FROM reward_goals WHERE child_id = ? ORDER BY sort_order')
@@ -213,7 +236,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
            t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day' AND t.goal_id IS NOT NULL
+    WHERE t.child_id = ? AND t.period = 'day' AND t.goal_id IS NOT NULL AND substr(t.id,1,3) <> 'gp_'
     ORDER BY t.sort_order`).bind(date, childId).all<TaskRow>()
   const subByGoal = new Map<string, ReturnType<typeof mapTask>[]>()
   for (const r of subRows.results) {
@@ -227,7 +250,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     const gs = hasRange ? r.start_date! : aStart
     const ge = hasRange ? r.end_date! : aEnd
     const dDay = r.end_date ? Math.ceil((Date.parse(r.end_date + 'T00:00:00Z') - Date.parse(date + 'T00:00:00Z')) / 86400000) : null
-    return { ...mapGoal(r, gs, ge), period, subplans: subByGoal.get(r.id) ?? [], dDay }
+    return { ...mapGoal(r, gs, ge), period, subplans: subByGoal.get(r.id) ?? [], dDay, todayPracticeId: 'gp_' + r.id, todayDone: gpDone.has('gp_' + r.id) }
   }
   const goals = [
     ...week.results.map((r) => mapGoalFull(r, weekStart, weekEnd, 'week')),
@@ -316,7 +339,7 @@ async function maybeSurprise(db: D1Database, childId: string, today: string, now
   const agg = await db.prepare(`
     SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN c.done = 1 THEN 1 ELSE 0 END),0) AS done
     FROM tasks t LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
-    WHERE t.child_id = ? AND t.period = 'day' AND ${DAY_RECUR_SQL}`)
+    WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}`)
     .bind(today, childId, ...dayRecurBinds(today, isWeekday, dayBitOf(today))).first<{ total: number; done: number }>()
   if (!agg || agg.total === 0 || agg.done < agg.total) return null // 전부 완료 아니면 없음
 
@@ -391,23 +414,8 @@ scheduleRoutes.post('/tasks', async (c) => {
     progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, gStart, tEnd, order?.n ?? 1, now,
   ).run()
 
-  // 목표를 세우면 같은 이름의 '매일 실천'을 오늘 할일에 자동 추가 → 체크 가능·목표에 롤업
-  if (period !== 'day' && (body.autoDaily ?? true)) {
-    await createGoalPractice(db, auth.session.family_id, childId, auth.session.member_id, id, title, category, gStart ?? theDate, tEnd, now)
-  }
-
   return c.json({ ok: true, id })
 })
-
-/** 목표에 연결된 '매일 실천' 하루 할일을 만든다 (기간 동안 오늘 할일에 체크로 나타남) */
-async function createGoalPractice(db: D1Database, familyId: string, childId: string, authorId: string, goalId: string, title: string, category: string, startISO: string, endISO: string | null, now: number) {
-  const pid = randomId('task')
-  const pOrder = (await db.prepare("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM tasks WHERE child_id = ? AND period = 'day'").bind(childId).first<{ n: number }>())?.n ?? 1
-  await db.prepare(
-    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, start_date, end_date, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, 'day', ?, 10, ?, NULL, 0, NULL, 'daily', NULL, ?, NULL, ?, ?, ?)`,
-  ).bind(pid, familyId, childId, title, category, authorId, startISO, goalId, endISO, pOrder, now).run()
-}
 
 // 일정 수정 (자녀는 본인 작성분만)
 scheduleRoutes.put('/tasks/:id', async (c) => {
@@ -443,12 +451,6 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   if (task.period !== 'day' && (title !== task.title || category !== task.category)) {
     await db.prepare("UPDATE tasks SET title = ?, category = ? WHERE goal_id = ? AND period = 'day' AND title = ?")
       .bind(title, category, taskId, task.title).run()
-  }
-
-  // 목표 수정 시, '오늘 할일로 넣기'가 켜져 있고 연결된 매일 실천이 하나도 없으면 자동 생성 (기존 목표 반영)
-  if (task.period !== 'day' && (body.autoDaily ?? false)) {
-    const cnt = (await db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE goal_id = ? AND period = 'day'").bind(taskId).first<{ n: number }>())?.n ?? 0
-    if (cnt === 0) await createGoalPractice(db, task.family_id, task.child_id, auth.session.member_id, taskId, title, category, gStart ?? familyDate(task.family_id), tEnd, Date.now())
   }
 
   return c.json({ ok: true })

@@ -8,14 +8,18 @@ import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
 import { approveTask, toggleTask as apiToggle, fetchDayTasks, getStudy, DEMO_FAMILY, type StudySnapshot } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
-import type { ScheduleItem } from '../types'
+import type { ScheduleItem, GoalItem } from '../types'
 
 const fh = (m: number) => `${Math.round((m / 60) * 10) / 10}시간`
+function Check() {
+  return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
 
 export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => void; onGoToGoals?: () => void }) {
   const { snapshot, childId, toggleTask, reload } = useApp()
   const { status, me, familyId } = useAuth()
   const [editor, setEditor] = useState<{ existing?: ScheduleItem; prefill?: Prefill } | null>(null)
+  const [goalEdit, setGoalEdit] = useState<GoalItem | null>(null)
   const [noteFor, setNoteFor] = useState<ScheduleItem | null>(null)
   const [encourage, setEncourage] = useState(false)
   const [templates, setTemplates] = useState(false)
@@ -65,11 +69,22 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
     if (isToday) reload(); else refetchOther()
   }
   async function handleToggle(id: string) {
-    if (isToday) { toggleTask(id); return }
+    const t = tasks.find((x) => x.id === id)
+    const wasDone = !!t?.done
+    if (isToday) { toggleTask(id); if (!wasDone && t) setNoteFor(t); return }
     if (isFuture) return
-    setOtherTasks((prev) => prev ? prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) : prev)
+    setOtherTasks((prev) => prev ? prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)) : prev)
     try { await apiToggle(id, childId, date) } catch { /* 무시 */ }
+    if (!wasDone && t) setNoteFor(t)
     refetchOther()
+  }
+  // 목표를 오늘 실천 체크 (숨은 gp_ 실천 토글 → 목표 진행률 롤업). 체크 시 '오늘 한 일' 기록 유도.
+  async function toggleGoal(g: GoalItem) {
+    if (isFuture || !g.todayPracticeId) return
+    const wasDone = !!g.todayDone
+    try { await apiToggle(g.todayPracticeId, childId, date) } catch { /* 무시 */ }
+    if (!wasDone) setNoteFor({ id: g.todayPracticeId, title: g.title } as unknown as ScheduleItem)
+    reload()
   }
   function afterNote() { if (isToday) reload(); else refetchOther() }
 
@@ -86,28 +101,7 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
         {isToday && snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
       </div>
 
-      {/* 이 기간 목표 — 목표 탭에서 기간을 정하면 그 기간 동안 계획에 자동으로 나타남 */}
-      {activeGoals.length > 0 && (
-        <div className="plangoals">
-          <button type="button" className="pgs-head" onClick={onGoToGoals}>🎯 이 기간 목표 {activeGoals.length} <span className="pgs-more">관리 ›</span></button>
-          {activeGoals.map((g) => (
-            <div key={g.id} className="pgoal">
-              <span className={`pg-dot ${g.category}`} aria-hidden="true" />
-              <span className="pgoal-mid">
-                <span className="pgoal-t">{g.title}{typeof g.dDay === 'number' && g.dDay >= 0 && <em className="pgoal-dday">D-{g.dDay}</em>}</span>
-                <span className="pgoal-bar"><i style={{ width: `${g.progress}%` }} /></span>
-              </span>
-              <span className="pgoal-pct">{g.progress}%</span>
-              {canManage && (
-                <button type="button" className="pgoal-add" aria-label="이 목표 실천 담기" title="이 목표를 위한 실천 담기"
-                  onClick={() => setEditor({ prefill: { goalId: g.id, category: g.category, endDate: g.endDate ?? undefined } })}>＋</button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 순공 자동 요약 — 매일 순공하면 여기 자동 반영 (탭하면 순공 탭) */}
+      {/* 순공 요약 — 맨 위에 크게 (탭하면 순공 탭) */}
       {isToday && study && (study.today.totalMin > 0 || study.goals.length > 0) && (
         <button type="button" className="study-strip" onClick={onGoToStudy}>
           <span className="ss-today">⏱ 오늘 순공 <b>{fh(study.today.totalMin)}</b></span>
@@ -116,6 +110,28 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
           )}
           <span className="ss-arrow" aria-hidden="true">›</span>
         </button>
+      )}
+
+      {/* 이 기간 목표 — 계획 탭에서 매일 체크(오른쪽 톱니바퀴로 관리) */}
+      {activeGoals.length > 0 && (
+        <div className="plangoals">
+          <button type="button" className="pgs-head" onClick={onGoToGoals}>🎯 이 기간 목표 {activeGoals.length} <span className="pgs-more">관리 ›</span></button>
+          {activeGoals.map((g) => (
+            <div key={g.id} className={`pgoal${g.todayDone ? ' done' : ''}`}>
+              <button type="button" className="pgoal-check" disabled={isFuture} aria-pressed={!!g.todayDone}
+                aria-label={`${g.title} 오늘 실천 체크`} onClick={() => canToggle && toggleGoal(g)}><Check /></button>
+              <span className="pgoal-mid">
+                <span className="pgoal-t"><span className={`pg-dot ${g.category}`} aria-hidden="true" /> {g.title}{typeof g.dDay === 'number' && g.dDay >= 0 && <em className="pgoal-dday">D-{g.dDay}</em>}</span>
+                <span className="pgoal-bar"><i style={{ width: `${g.progress}%` }} /></span>
+              </span>
+              <span className="pgoal-pct">{g.progress}%</span>
+              {canManage && (
+                <button type="button" className="pgoal-gear" aria-label="목표 관리" title="목표 고치기·기간 조정"
+                  onClick={() => setGoalEdit(g)}>⚙️</button>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* 오늘 할일 — 화면 주인공. 진행 요약 + 큰 카드 평면 리스트(목표는 색·꼬리표로만) */}
@@ -168,6 +184,10 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
         <TaskEditor childId={childId} period="day" existing={editor.existing}
           prefill={editor.prefill} targetDate={date} defaultRecur={editor.prefill ? 'daily' : undefined}
           onClose={() => setEditor(null)} onSaved={reload} />
+      )}
+      {goalEdit && canManage && (
+        <TaskEditor childId={childId} period={goalEdit.period} existing={goalEdit}
+          onClose={() => setGoalEdit(null)} onSaved={reload} />
       )}
       {noteFor && canManage && (
         <NoteEditor task={noteFor} childId={childId} date={date}

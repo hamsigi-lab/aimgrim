@@ -51,6 +51,10 @@ export interface GoalItem extends ScheduleItem {
   subplans: ScheduleItem[]
   /** 종료일까지 남은 일수 (end_date 있을 때). 오늘=0, 지남=음수 */
   dDay?: number | null
+  /** 계획 탭에서 목표를 매일 체크하기 위한 '숨은 실천' 할일 id */
+  todayPracticeId?: string
+  /** 오늘 이 목표를 체크(실천)했는지 */
+  todayDone?: boolean
 }
 
 /** 자녀가 스스로 정한 보상 목표 (별점으로 교환). 진행률은 현재 별점 기준으로 계산. */

@@ -705,14 +705,22 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .pgs-more { color: var(--mint-deep); font-weight: 800; opacity: .85; }
 .pgoal { display: flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 6px; }
 .pgoal:last-child { margin-bottom: 0; }
-.pgoal .pg-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; }
+.pgoal.done { background: var(--mint-wash); border-color: #CDE8E0; }
+.pgoal-check { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; border: 2.5px solid var(--ink-faint); background: #fff; cursor: pointer; padding: 0; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.pgoal-check svg { width: 15px; height: 15px; opacity: 0; transition: opacity .15s; }
+.pgoal.done .pgoal-check { background: var(--mint); border-color: var(--mint); }
+.pgoal.done .pgoal-check svg { opacity: 1; }
+.pgoal-check:disabled { opacity: .5; cursor: default; }
+.pgoal-t .pg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .pgoal-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .pgoal-t { font-size: 13.5px; font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pgoal.done .pgoal-t { color: var(--ink-faint); }
 .pgoal-dday { font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--apricot); background: var(--apricot-wash); border-radius: 100px; padding: 1px 6px; margin-left: 6px; }
 .pgoal-bar { height: 5px; background: var(--line); border-radius: 100px; overflow: hidden; }
 .pgoal-bar i { display: block; height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); }
 .pgoal-pct { font-size: 12px; font-weight: 800; color: var(--mint-deep); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
-.pgoal-add { width: 28px; height: 28px; flex: 0 0 28px; border: 1.5px solid #B7E2D5; background: #fff; color: var(--mint-deep); border-radius: 9px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.pgoal-gear { width: 30px; height: 30px; flex: 0 0 30px; border: none; background: transparent; font-size: 16px; cursor: pointer; border-radius: 9px; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.pgoal-gear:active { background: var(--line); }
 
 /* 계획 탭 순공 자동 요약 스트립 */
 .study-strip { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--mint-wash); border: 1.5px solid #CDE8E0; border-radius: 14px; padding: 10px 13px; margin: 0 0 14px; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
