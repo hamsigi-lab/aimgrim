@@ -11,6 +11,11 @@ const DEFAULT_SUBJECTS: [string, string][] = [
   ['과학', '#FF7EA6'], ['사회', '#FFC94D'], ['기타', '#7FB2F0'],
 ]
 
+// 순공 자동 별점: 30분당 +2, 하루 상한 +12(=3시간) / 일일 목표 +10 / 기간 마일스톤 25·50·75·100%
+const TIME_PER_30 = 2, TIME_CAP = 12, DAILY_GOAL_BONUS = 10
+const MILESTONES: [number, number][] = [[25, 20], [50, 30], [75, 40], [100, 100]]
+const timePtsFor = (min: number) => Math.min(TIME_CAP, Math.floor(min / 30) * TIME_PER_30)
+
 interface SubjectRow { id: string; name: string; color: string }
 interface SessionRow {
   id: string; subject_id: string | null; subject_name: string; color: string
@@ -215,7 +220,51 @@ studyRoutes.post('/study/sessions', async (c) => {
   await db.prepare(
     'INSERT INTO study_sessions (id, family_id, child_id, subject_id, subject_name, color, minutes, note, the_date, task_id, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, ok.familyId, childId, body.subjectId ?? null, subjectName, color, minutes, note, date, body.taskId ?? null, mode, now).run()
-  return c.json({ ok: true, id })
+
+  // 순공 자동 별점 (오늘 세션만) — 시간 별점(상한) + 일일목표 보너스 + 기간 마일스톤. 중복 방지 테이블로 idempotent.
+  let awarded = 0
+  if (date === familyDate(ok.familyId)) {
+    const totalToday = (await db.prepare('SELECT COALESCE(SUM(minutes),0) AS m FROM study_sessions WHERE child_id = ? AND the_date = ?').bind(childId, date).first<{ m: number }>())?.m ?? 0
+    const want = timePtsFor(totalToday)
+    const dayRow = await db.prepare('SELECT time_pts, daily_goal FROM study_day_awards WHERE child_id = ? AND the_date = ?').bind(childId, date).first<{ time_pts: number; daily_goal: number }>()
+    const deltaTime = Math.max(0, want - (dayRow?.time_pts ?? 0))
+
+    const sgList = (await db.prepare('SELECT id, target_min, daily_target_min, start_date, end_date FROM study_goals WHERE child_id = ? ORDER BY created_at')
+      .bind(childId).all<{ id: string; target_min: number; daily_target_min: number | null; start_date: string; end_date: string }>()).results
+    const dailyTarget = sgList.find((g) => g.daily_target_min)?.daily_target_min ?? null
+    const dailyBonus = (dailyTarget && totalToday >= dailyTarget && !(dayRow?.daily_goal ?? 0)) ? DAILY_GOAL_BONUS : 0
+
+    const extra: D1PreparedStatement[] = []
+    let milestoneBonus = 0
+    for (const g of sgList) {
+      if (!(date >= g.start_date && date <= g.end_date)) continue
+      const acc = (await db.prepare('SELECT COALESCE(SUM(minutes),0) AS m FROM study_sessions WHERE child_id = ? AND the_date >= ? AND the_date <= ?').bind(childId, g.start_date, g.end_date).first<{ m: number }>())?.m ?? 0
+      let mask = (await db.prepare('SELECT milestones FROM study_goal_awards WHERE child_id = ? AND goal_id = ?').bind(childId, g.id).first<{ milestones: number }>())?.milestones ?? 0
+      let gAdd = 0
+      MILESTONES.forEach(([pct, bonus], i) => {
+        if (acc >= Math.ceil((g.target_min * pct) / 100) && !(mask & (1 << i))) {
+          gAdd += bonus; mask |= (1 << i)
+          extra.push(db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)').bind(randomId('pl'), childId, bonus, 'study_milestone', `순공 목표 ${pct}% 달성`, now))
+        }
+      })
+      if (gAdd > 0) { milestoneBonus += gAdd; extra.push(db.prepare('INSERT INTO study_goal_awards (child_id, goal_id, milestones) VALUES (?, ?, ?) ON CONFLICT(child_id, goal_id) DO UPDATE SET milestones = excluded.milestones').bind(childId, g.id, mask)) }
+    }
+
+    awarded = deltaTime + dailyBonus + milestoneBonus
+    if (awarded > 0) {
+      const stmts: D1PreparedStatement[] = [
+        db.prepare('UPDATE members SET points = points + ? WHERE id = ?').bind(awarded, childId),
+        db.prepare('INSERT INTO study_day_awards (child_id, the_date, time_pts, daily_goal) VALUES (?, ?, ?, ?) ON CONFLICT(child_id, the_date) DO UPDATE SET time_pts = excluded.time_pts, daily_goal = MAX(study_day_awards.daily_goal, excluded.daily_goal)')
+          .bind(childId, date, want, dailyBonus > 0 ? 1 : (dayRow?.daily_goal ?? 0)),
+        ...extra,
+      ]
+      if (deltaTime > 0) stmts.push(db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)').bind(randomId('pl'), childId, deltaTime, 'study_time', '순공 시간 보너스', now))
+      if (dailyBonus > 0) stmts.push(db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)').bind(randomId('pl'), childId, dailyBonus, 'study_daily', '하루 순공 목표 달성', now))
+      await db.batch(stmts)
+    }
+  }
+
+  return c.json({ ok: true, id, awarded })
 })
 
 // 세션 삭제

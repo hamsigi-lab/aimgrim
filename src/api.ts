@@ -176,7 +176,7 @@ export function getStudy(familyId: string, childId: string, date?: string): Prom
   return fetch(`/api/family/${familyId}/study?childId=${childId}${q}`).then((r) => json<StudySnapshot>(r))
 }
 export const createSession = (input: { childId: string; subjectId?: string | null; subjectName: string; color: string; minutes: number; note?: string; taskId?: string | null; mode?: string; date?: string }) =>
-  mutate<{ ok: boolean; id: string }>('/api/study/sessions', 'POST', input)
+  mutate<{ ok: boolean; id: string; awarded: number }>('/api/study/sessions', 'POST', input)
 export const deleteSession = (id: string) => mutate(`/api/study/sessions/${id}`, 'DELETE')
 export const createSubject = (input: { childId: string; name: string; color: string }) => mutate<{ ok: boolean; id: string }>('/api/study/subjects', 'POST', input)
 export const deleteSubject = (id: string) => mutate(`/api/study/subjects/${id}`, 'DELETE')

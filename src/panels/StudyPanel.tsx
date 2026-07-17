@@ -34,8 +34,10 @@ function readTimer(key: string): TimerState | null {
 /** 순공시간 탭 — 정직한 스톱워치(순공 실측) + 과목 기록 + 오늘/주/월 시각화.
  *  순위·경쟁 없음, '나의 기록·성취'로. 시간엔 별점 미지급. */
 export function StudyPanel() {
-  const { childId } = useApp()
+  const { childId, refresh } = useApp()
   const { status, familyId } = useAuth()
+  const [gain, setGain] = useState<number | null>(null)
+  useEffect(() => { if (gain == null) return; const t = window.setTimeout(() => setGain(null), 2400); return () => window.clearTimeout(t) }, [gain])
   const fam = status === 'demo' ? DEMO_FAMILY : familyId ?? DEMO_FAMILY
   const canManage = status !== 'demo'
 
@@ -101,6 +103,8 @@ export function StudyPanel() {
     <div className="panel">
       <div className="daterow"><span className="big">순공시간</span><span className="sub">순수하게 공부한 시간, 나의 기록 ⏱</span></div>
 
+      {gain != null && <div className="study-gain" role="status">+{gain} ⭐ 획득!</div>}
+
       {/* 순공 기간 누적목표 — 한눈에 누적 달성 */}
       {data.goals.map((g) => (
         <StudyGoalProgress key={g.id} goal={g} todayMin={data.today.totalMin}
@@ -155,7 +159,8 @@ export function StudyPanel() {
       {saveSheet && (
         <SessionSaveSheet minutes={saveSheet.minutes} subject={subject} subjects={data.subjects}
           childId={childId} pomodoro={pomodoro}
-          onClose={() => setSaveSheet(null)} onSaved={() => { setSaveSheet(null); load() }} />
+          onClose={() => setSaveSheet(null)}
+          onSaved={(awarded) => { setSaveSheet(null); load(); if (awarded > 0) { setGain(awarded); refresh() } }} />
       )}
       {goalEdit && (
         <StudyGoalEditor childId={childId} today={data.date} existing={goalEdit === 'new' ? undefined : goalEdit}
@@ -204,7 +209,7 @@ function SubjectPicker({ subjects, value, onChange, childId, canManage, onAdded 
 /* ── 세션 저장 시트 ── */
 function SessionSaveSheet({ minutes, subject, subjects, childId, pomodoro, onClose, onSaved }: {
   minutes: number; subject: Subject | null; subjects: Subject[]; childId: string; pomodoro: boolean
-  onClose: () => void; onSaved: () => void
+  onClose: () => void; onSaved: (awarded: number) => void
 }) {
   const [subj, setSubj] = useState<Subject | null>(subject ?? subjects[0] ?? null)
   const [min, setMin] = useState(minutes)
@@ -214,8 +219,8 @@ function SessionSaveSheet({ minutes, subject, subjects, childId, pomodoro, onClo
     if (!subj || min < 1) return
     setBusy(true)
     try {
-      await createSession({ childId, subjectId: subj.id, subjectName: subj.name, color: subj.color, minutes: min, note: note.trim(), mode: pomodoro ? 'pomodoro' : 'stopwatch' })
-      onSaved()
+      const res = await createSession({ childId, subjectId: subj.id, subjectName: subj.name, color: subj.color, minutes: min, note: note.trim(), mode: pomodoro ? 'pomodoro' : 'stopwatch' })
+      onSaved(res.awarded ?? 0)
     } catch { setBusy(false) }
   }
   return (

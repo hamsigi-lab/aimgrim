@@ -151,6 +151,12 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
               <span className="pv">{points} ⭐</span>
               <button type="button" onClick={() => setPoints((p) => Math.min(1000, p + 5))} aria-label="늘리기">+</button>
             </div>
+            <div className="diff-chips">
+              {(isGoal ? [['쉬운', 20], ['보통', 40], ['도전', 80]] : [['쉬움', 5], ['보통', 10], ['어려움', 20]]).map(([lab, val]) => (
+                <button type="button" key={lab} className={`diff-chip${points === val ? ' on' : ''}`} onClick={() => setPoints(val as number)}>{lab} {val}</button>
+              ))}
+            </div>
+            <span className="hint">어렵거나 하기 싫은 일일수록 별점을 높게 주면 동기부여에 좋아요.</span>
           </div>
 
           {!isGoal ? (

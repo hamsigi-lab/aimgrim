@@ -771,6 +771,14 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .av-cheer { background: var(--grape-wash); border: 1.5px solid #E2D9FA; border-radius: 14px; padding: 11px 13px; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.5; }
 .av-cheer b { color: #6A55C9; font-weight: 800; }
 
+/* 순공 별점 획득 토스트 */
+.study-gain { text-align: center; font-family: var(--round); font-weight: 800; color: var(--mint-deep); background: var(--mint-wash); border: 1.5px solid #CDE8E0; border-radius: 100px; padding: 9px; margin-bottom: 12px; font-size: 15px; animation: pop .4s cubic-bezier(.3,1.6,.5,1); }
+
+/* 난이도 프리셋 칩 */
+.diff-chips { display: flex; gap: 7px; margin-top: 9px; }
+.diff-chip { flex: 1; border: 1.5px solid var(--line); background: #fff; border-radius: 11px; padding: 8px 4px; font-size: 12.5px; font-weight: 800; color: var(--ink-soft); font-family: inherit; cursor: pointer; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent; }
+.diff-chip.on { border-color: var(--mint); background: var(--mint-wash); color: var(--mint-deep); }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
