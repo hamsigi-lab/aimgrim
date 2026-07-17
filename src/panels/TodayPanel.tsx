@@ -78,19 +78,19 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
   async function handleToggle(id: string) {
     const t = tasks.find((x) => x.id === id)
     const wasDone = !!t?.done
-    if (isToday) { toggleTask(id); if (!wasDone && t) setNoteFor(t); return }
+    if (!wasDone && t) setNoteFor(t) // 체크하는 순간 기록 창 먼저 오픈
+    if (isToday) { toggleTask(id); return }
     if (isFuture) return
     setOtherTasks((prev) => prev ? prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)) : prev)
     try { await apiToggle(id, childId, date) } catch { /* 무시 */ }
-    if (!wasDone && t) setNoteFor(t)
     refetchOther()
   }
   // 목표를 오늘 실천 체크 (숨은 gp_ 실천 토글 → 목표 진행률 롤업). 체크 시 '오늘 한 일' 기록 유도.
   async function toggleGoal(g: GoalItem) {
     if (isFuture || !g.todayPracticeId) return
     const wasDone = !!g.todayDone
+    if (!wasDone) setNoteFor({ id: g.todayPracticeId, title: g.title, note: g.todayNote ?? '' } as unknown as ScheduleItem) // 체크 순간 먼저 오픈
     try { await apiToggle(g.todayPracticeId, childId, date) } catch { /* 무시 */ }
-    if (!wasDone) setNoteFor({ id: g.todayPracticeId, title: g.title } as unknown as ScheduleItem)
     refresh() // 로딩 화면 없이 갱신 (기록 창 유지)
   }
   function afterNote() { if (isToday) refresh(); else refetchOther() }

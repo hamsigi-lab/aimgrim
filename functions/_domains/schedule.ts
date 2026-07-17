@@ -533,12 +533,12 @@ scheduleRoutes.post('/tasks/:taskId/note', async (c) => {
     if (body.date > today) return c.json({ error: 'future_date' }, 400)
     date = body.date
   }
-  const comp = await db.prepare('SELECT done FROM completions WHERE task_id = ? AND the_date = ?').bind(taskId, date).first<{ done: number }>()
-  if (!comp?.done) return c.json({ error: 'not_completed' }, 400) // 완료한 항목에만 기록
-
   const note = (body.note ?? '').trim().slice(0, 80) || null
   const minutes = Math.max(0, Math.min(600, Math.round(Number(body.minutes ?? 0)))) || null
-  await db.prepare('UPDATE completions SET note = ?, minutes = ? WHERE task_id = ? AND the_date = ?')
-    .bind(note, minutes, taskId, date).run()
+  // 기록 자체가 '했음'을 의미 — 완료 행이 없으면 done=1로 생성, 있으면 메모/시간만 갱신 (토글 직후 빠른 저장에도 안전)
+  await db.prepare(`INSERT INTO completions (task_id, the_date, done, approved, note, minutes, completed_at)
+     VALUES (?, ?, 1, 0, ?, ?, ?)
+     ON CONFLICT(task_id, the_date) DO UPDATE SET note = excluded.note, minutes = excluded.minutes`)
+    .bind(taskId, date, note, minutes, Date.now()).run()
   return c.json({ ok: true })
 })
