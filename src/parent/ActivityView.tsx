@@ -7,11 +7,14 @@ const fh = (m: number) => (m <= 0 ? '0분' : m < 60 ? `${m}분` : `${Math.round(
 const AUTHOR: Record<string, string> = { me: '스스로', mom: '엄마', dad: '아빠' }
 
 /** 부모용 — 자녀의 오늘 활동 + 목표 실천 단계를 한눈에 보는 모니터 화면 (읽기 전용). */
-export function ActivityView({ childId, name, onBack, onManage }: {
+export function ActivityView({ childId, name, onBack, onManage, canManage = true, greeting = '오늘 활동을 한눈에 💛' }: {
   childId: string
   name: string
   onBack: () => void
-  onManage: () => void
+  onManage?: () => void
+  /** 부모=관리 진입 버튼 노출, 형제=읽기 전용(숨김) */
+  canManage?: boolean
+  greeting?: string
 }) {
   const { familyId } = useAuth()
   const fam = familyId ?? DEMO_FAMILY
@@ -34,10 +37,10 @@ export function ActivityView({ childId, name, onBack, onManage }: {
       <header className="appbar">
         <button type="button" className="menu-btn" aria-label="뒤로" onClick={onBack} style={{ marginRight: 2 }}>‹</button>
         <div className="hi">
-          <div className="greet">오늘 활동을 한눈에 💛</div>
+          <div className="greet">{greeting}</div>
           <div className="name">{name}의 오늘</div>
         </div>
-        <button type="button" className="av-manage" onClick={onManage}>아이 화면 ›</button>
+        {canManage && onManage && <button type="button" className="av-manage" onClick={onManage}>아이 화면 ›</button>}
       </header>
 
       <main className="body">
@@ -132,9 +135,11 @@ export function ActivityView({ childId, name, onBack, onManage }: {
               </>
             )}
 
-            <div className="add-row" style={{ marginTop: 18 }}>
-              <button type="button" className="add-btn" onClick={onManage}>이 아이 화면 열기 (관리·격려)</button>
-            </div>
+            {canManage && onManage && (
+              <div className="add-row" style={{ marginTop: 18 }}>
+                <button type="button" className="add-btn" onClick={onManage}>이 아이 화면 열기 (관리·격려)</button>
+              </div>
+            )}
           </>
         )}
       </main>

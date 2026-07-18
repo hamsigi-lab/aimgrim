@@ -41,7 +41,7 @@ scheduleRoutes.get('/family/:familyId/day', async (c) => {
   if (familyId !== 'fam_demo') {
     const session = await requireSession(db, c.req.header('Cookie') ?? null)
     if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
-    if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
+    // 같은 가족이면 형제 것도 읽기 허용(쓰기는 authChild로 본인만) — 서로 응원 공유
   }
 
   const isWeekday = isWeekdayOf(date)
@@ -67,7 +67,7 @@ scheduleRoutes.get('/family/:familyId/week', async (c) => {
   if (familyId !== 'fam_demo') {
     const session = await requireSession(db, c.req.header('Cookie') ?? null)
     if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
-    if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
+    // 같은 가족이면 형제 것도 읽기 허용(쓰기는 authChild로 본인만) — 서로 응원 공유
   }
 
   const today = familyDate(familyId)
@@ -87,11 +87,11 @@ scheduleRoutes.get('/family/:familyId/week', async (c) => {
   return c.json({ start, today, days })
 })
 
-// 부모 대시보드용 — 가족 내 자녀별 오늘 요약
+// 가족 대시보드 — 자녀별 오늘 요약 (부모 + 자녀 모두 열람: 형제끼리 함께 응원)
 scheduleRoutes.get('/family/:familyId/overview', async (c) => {
   const db = c.env.DB
   const familyId = c.req.param('familyId')
-  const session = await readSessionParent(db, c.req.header('Cookie') ?? null)
+  const session = await requireSession(db, c.req.header('Cookie') ?? null)
   if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
 
   const date = familyDate(familyId)
@@ -142,7 +142,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   if (familyId !== 'fam_demo') {
     const session = await requireSession(db, c.req.header('Cookie') ?? null)
     if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
-    if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
+    // 같은 가족이면 형제 것도 읽기 허용(쓰기는 authChild로 본인만) — 서로 응원 공유
   }
 
   const child = await db

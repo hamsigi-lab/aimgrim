@@ -781,6 +781,18 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .av-gbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--mint), var(--mint-deep)); border-radius: 100px; }
 .av-gmeta { margin-top: 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
+/* 함께 힘내는 우리 가족 (형제 공유) */
+.fam-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.fam-card { display: flex; align-items: center; gap: 11px; background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 11px 13px; cursor: pointer; font-family: inherit; text-align: left; width: 100%; -webkit-tap-highlight-color: transparent; }
+.fam-card.me { border-color: #CDE8E0; background: var(--mint-wash); }
+.fam-av { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%; background: var(--mint-wash); display: grid; place-items: center; font-size: 19px; }
+.fam-card.me .fam-av { background: #fff; }
+.fam-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fam-name { font-size: 14.5px; font-weight: 800; color: var(--ink); display: flex; align-items: center; }
+.fam-me { font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--mint-deep); background: #fff; border: 1px solid #CDE8E0; border-radius: 100px; padding: 1px 7px; margin-left: 6px; }
+.fam-chips { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.fam-pts { font-size: 13px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
 /* 순공 별점 획득 토스트 */
 .study-gain { text-align: center; font-family: var(--round); font-weight: 800; color: var(--mint-deep); background: var(--mint-wash); border: 1.5px solid #CDE8E0; border-radius: 100px; padding: 9px; margin-bottom: 12px; font-size: 15px; animation: pop .4s cubic-bezier(.3,1.6,.5,1); }
 

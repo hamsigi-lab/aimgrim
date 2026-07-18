@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { Mascot } from '../components/Mascot'
 import { RewardEditor } from '../components/RewardEditor'
 import { LedgerSheet } from '../components/LedgerSheet'
-import { deleteRewardGoal, redeemRewardGoal } from '../api'
+import { ActivityView } from '../parent/ActivityView'
+import { deleteRewardGoal, redeemRewardGoal, getOverview, DEMO_FAMILY, type ChildOverview } from '../api'
+
+const fh = (m: number) => (m < 60 ? `${m}분` : `${Math.round((m / 60) * 10) / 10}시간`)
 
 const SAYINGS = [
   '잘하고 있어! 조금만 더 모으면 돼 ✨',
@@ -15,10 +18,19 @@ const SAYINGS = [
 
 export function PointsPanel({ celebrating }: { celebrating: boolean }) {
   const { snapshot, childId, points, reload } = useApp()
-  const { status } = useAuth()
+  const { status, familyId } = useAuth()
+  const fam = status === 'demo' ? DEMO_FAMILY : familyId ?? DEMO_FAMILY
   const [adding, setAdding] = useState(false)
   const [ledgerOpen, setLedgerOpen] = useState(false)
   const [redeeming, setRedeeming] = useState<string | null>(null)
+  const [family, setFamily] = useState<ChildOverview[] | null>(null)
+  const [viewSib, setViewSib] = useState<{ id: string; name: string } | null>(null)
+  useEffect(() => { getOverview(fam).then((r) => setFamily(r.children)).catch(() => setFamily(null)) }, [fam])
+
+  if (viewSib) {
+    return <ActivityView childId={viewSib.id} name={viewSib.name} canManage={false}
+      greeting="함께 응원해요 💪" onBack={() => setViewSib(null)} />
+  }
   if (!snapshot) return null
   const canManage = status !== 'demo'
   const say = SAYINGS[Math.floor(points / 40) % SAYINGS.length]
@@ -46,7 +58,26 @@ export function PointsPanel({ celebrating }: { celebrating: boolean }) {
         <button type="button" className="linkbtn" onClick={() => setLedgerOpen(true)}>별점 내역 보기 →</button>
       </div>
 
-      <div className="sechead"><h3>갖고 싶은 것</h3><span className="count">내가 정한 목표</span></div>
+      {family && family.length >= 2 && (
+        <>
+          <div className="sechead"><h3>💪 함께 힘내는 우리 가족</h3></div>
+          <div className="fam-cards">
+            {family.map((ch) => (
+              <button type="button" className={`fam-card${ch.id === childId ? ' me' : ''}`} key={ch.id} onClick={() => setViewSib({ id: ch.id, name: ch.name })}>
+                <span className="fam-av" aria-hidden="true">🌱</span>
+                <span className="fam-mid">
+                  <span className="fam-name">{ch.name}{ch.id === childId && <em className="fam-me">나</em>}</span>
+                  <span className="fam-chips">📋 {ch.todayDone}/{ch.todayTotal} · 🎯 {ch.goalDone}/{ch.goalTotal} · ⏱ {fh(ch.studyMin)}</span>
+                </span>
+                <span className="fam-pts">⭐ {ch.points}</span>
+              </button>
+            ))}
+          </div>
+          <p className="empty-hint" style={{ paddingTop: 2 }}>서로의 하루를 보고 응원해요. 순위는 없어요 🙂</p>
+        </>
+      )}
+
+      <div className="sechead" style={{ marginTop: 18 }}><h3>갖고 싶은 것</h3><span className="count">내가 정한 목표</span></div>
 
       {snapshot.rewardGoals.map((r) => {
         // 진행률은 현재 보유 별점 기준 (별도 저축 개념 없이 단일 지갑)

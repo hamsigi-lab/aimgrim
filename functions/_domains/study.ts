@@ -54,7 +54,7 @@ studyRoutes.get('/family/:familyId/study', async (c) => {
   if (familyId !== 'fam_demo') {
     const session = await requireSession(db, c.req.header('Cookie') ?? null)
     if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
-    if (session.role === 'child' && session.member_id !== childId) return c.json({ error: 'forbidden' }, 403)
+    // 같은 가족이면 형제 순공도 읽기 허용 (서로 응원 공유)
   }
 
   const date = c.req.query('date') && /^\d{4}-\d{2}-\d{2}$/.test(c.req.query('date')!) ? c.req.query('date')! : familyDate(familyId)
