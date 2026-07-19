@@ -2,7 +2,15 @@
 // 새 가족 서비스(캘린더/용돈 등)를 추가할 때도 이 코어(가족/멤버 spine, 세션, 권한)를 재사용한다.
 import { readSession, type SessionRow } from './session'
 
-export type Bindings = { DB: D1Database; GOOGLE_CLIENT_ID?: string }
+export type Bindings = {
+  DB: D1Database
+  GOOGLE_CLIENT_ID?: string
+  /** 이메일 발송(비밀번호 재설정) — 설정 시 기능 활성 */
+  RESEND_API_KEY?: string
+  EMAIL_FROM?: string
+  /** 재설정 링크에 쓰는 앱 주소 (예: https://aimgrim.pages.dev) */
+  APP_URL?: string
+}
 export type Author = 'me' | 'mom' | 'dad'
 
 export const CONSENT_AGE = 14 // 만 14세 미만은 법정대리인 동의 필요 (개인정보보호법 §22조의2)

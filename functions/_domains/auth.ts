@@ -1,8 +1,9 @@
 // 인증 도메인 — 부모 가입/로그인, 자녀 추가(+동의), 초대코드 입장, me, 로그아웃.
 import { Hono } from 'hono'
-import { hashPassword, verifyPassword, inviteCode, randomId } from '../_lib/crypto'
+import { hashPassword, verifyPassword, inviteCode, randomId, randomToken } from '../_lib/crypto'
 import { createSession, sessionCookie, destroySession, clearSessionCookie, type SessionRow } from '../_lib/session'
 import { verifyGoogleIdToken } from '../_lib/google'
+import { sendEmail, emailEnabled } from '../_lib/email'
 import {
   type Bindings, type MemberRow, CONSENT_AGE, ageFromBirthYear, requireSession, loadMe,
   isThrottled, recordFail, clearThrottle,
@@ -284,6 +285,50 @@ authRoutes.post('/auth/child/login', async (c) => {
   c.header('Set-Cookie', sessionCookie(token))
   const session: SessionRow = { token, member_id: child.id, family_id: child.family_id, role: 'child', expires_at: Date.now() }
   return c.json(await loadMe(db, session))
+})
+
+// 이메일 재설정 기능 활성 여부 (프론트가 '비밀번호 찾기' 노출 판단)
+authRoutes.get('/auth/config', (c) => c.json({ emailReset: emailEnabled(c.env) }))
+
+// 비밀번호 재설정 요청 — 존재 여부를 노출하지 않고 항상 성공 응답
+authRoutes.post('/auth/password/request', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{ email?: string }>().catch(() => ({} as { email?: string }))
+  const email = (body.email ?? '').trim().toLowerCase()
+  const bucket = `pr:${clientIp(c)}`
+  if (await isThrottled(db, bucket, 6, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
+  await recordFail(db, bucket, WINDOW)
+  const member = await db.prepare("SELECT id, email FROM members WHERE email = ? AND role = 'parent'").bind(email).first<{ id: string; email: string }>()
+  if (member && member.email && emailEnabled(c.env)) {
+    const token = randomToken()
+    const now = Date.now()
+    await db.prepare('INSERT INTO password_resets (token, member_id, expires_at, used, created_at) VALUES (?, ?, ?, 0, ?)')
+      .bind(token, member.id, now + 3600 * 1000, now).run()
+    const base = (c.env.APP_URL || 'https://aimgrim.pages.dev').replace(/\/$/, '')
+    const link = `${base}/reset?token=${token}`
+    await sendEmail(c.env, member.email, '아임그림 비밀번호 재설정',
+      `<p>비밀번호를 재설정하려면 아래 링크를 눌러주세요 (1시간 동안 유효).</p><p><a href="${link}">${link}</a></p><p>요청하지 않았다면 이 메일을 무시하세요.</p>`)
+  }
+  return c.json({ ok: true })
+})
+
+// 비밀번호 재설정 실행 — 토큰 검증 후 변경, 기존 세션 무효화
+authRoutes.post('/auth/password/reset', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{ token?: string; password?: string }>()
+  const token = (body.token ?? '').trim()
+  const password = body.password ?? ''
+  if (password.length < 6) return c.json({ error: 'weak_password' }, 400)
+  const row = await db.prepare('SELECT member_id, expires_at, used FROM password_resets WHERE token = ?')
+    .bind(token).first<{ member_id: string; expires_at: number; used: number }>()
+  if (!row || row.used || row.expires_at < Date.now()) return c.json({ error: 'invalid_token' }, 400)
+  const hash = await hashPassword(password)
+  await db.batch([
+    db.prepare('UPDATE members SET password_hash = ? WHERE id = ?').bind(hash, row.member_id),
+    db.prepare('UPDATE password_resets SET used = 1 WHERE token = ?').bind(token),
+    db.prepare('DELETE FROM sessions WHERE member_id = ?').bind(row.member_id),
+  ])
+  return c.json({ ok: true })
 })
 
 authRoutes.get('/me', async (c) => {

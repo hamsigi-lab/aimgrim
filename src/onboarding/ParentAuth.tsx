@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Mascot } from '../components/Mascot'
-import { parentSignup, parentJoin, parentLogin, googleAuth, ApiError, type Me } from '../auth/api'
+import { parentSignup, parentJoin, parentLogin, googleAuth, getAuthConfig, requestPasswordReset, ApiError, type Me } from '../auth/api'
 import { GoogleButton, googleEnabled } from '../components/GoogleButton'
 import { googleMayBeBlocked } from '../lib/env'
 
@@ -19,6 +19,10 @@ export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack:
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [googleCred, setGoogleCred] = useState<string | null>(null)
+  const [emailReset, setEmailReset] = useState(false)
+  const [forgot, setForgot] = useState(false)
+  const [sent, setSent] = useState(false)
+  useEffect(() => { getAuthConfig().then((r) => setEmailReset(r.emailReset)) }, [])
 
   const codeClean = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
 
@@ -189,6 +193,29 @@ export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack:
             {mode === 'signup' ? '이미 계정이 있어요 · 로그인' : '처음이에요 · 가족 시작하기'}
           </button>
         </div>
+
+        {mode === 'login' && emailReset && !forgot && (
+          <div style={{ textAlign: 'center' }}>
+            <button type="button" className="linkbtn" onClick={() => { setErr(null); setForgot(true) }}>비밀번호를 잊으셨나요?</button>
+          </div>
+        )}
+        {forgot && (
+          <div className="pw-forgot">
+            {sent ? (
+              <p className="hint" style={{ textAlign: 'center' }}>가입된 이메일이면 재설정 링크를 보냈어요. 메일함(스팸함 포함)을 확인해 주세요 📧</p>
+            ) : (
+              <>
+                <div className="field">
+                  <label htmlFor="fg-email">가입한 이메일</label>
+                  <input id="fg-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="parent@example.com" />
+                </div>
+                <button type="button" className="btn primary block" disabled={!emailOk || busy}
+                  onClick={async () => { setBusy(true); try { await requestPasswordReset(email.trim()); setSent(true) } catch { setErr('잠시 후 다시 시도해 주세요.') } finally { setBusy(false) } }}>재설정 메일 받기</button>
+                <div style={{ textAlign: 'center' }}><button type="button" className="linkbtn" onClick={() => { setForgot(false); setSent(false) }}>돌아가기</button></div>
+              </>
+            )}
+          </div>
+        )}
 
         {mode === 'signup' && (
           <p className="legal-note">

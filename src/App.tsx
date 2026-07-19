@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/store'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { Onboarding } from './onboarding/Onboarding'
+import { ResetPassword } from './onboarding/ResetPassword'
 import { AddChildScreen } from './onboarding/AddChildScreen'
 import { ParentHome } from './parent/ParentHome'
 import { GoalsPanel } from './panels/GoalsPanel'
@@ -193,6 +194,7 @@ function Root() {
 }
 
 export default function App() {
+  if (typeof window !== 'undefined' && window.location.pathname === '/reset') return <ResetPassword />
   return (
     <AuthProvider>
       <Root />

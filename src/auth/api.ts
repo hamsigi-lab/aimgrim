@@ -86,4 +86,27 @@ export function logout(): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>('/api/auth/logout', {})
 }
 
+export function getAuthConfig(): Promise<{ emailReset: boolean }> {
+  return fetch('/api/auth/config').then((r) => r.json() as Promise<{ emailReset: boolean }>).catch(() => ({ emailReset: false }))
+}
+export function requestPasswordReset(email: string): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>('/api/auth/password/request', { email })
+}
+export function resetPassword(token: string, password: string): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>('/api/auth/password/reset', { token, password })
+}
+export function deleteAccount(): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>('/api/account/delete', { confirm: true })
+}
+export async function exportMyData(): Promise<void> {
+  const res = await fetch('/api/account/export')
+  if (!res.ok) throw new ApiError('export_failed', res.status)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'aimgrim-data.json'
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export { ApiError }
