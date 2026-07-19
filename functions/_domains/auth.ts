@@ -134,6 +134,45 @@ authRoutes.post('/auth/parent/signup', async (c) => {
   return c.json(await loadMe(db, session))
 })
 
+// 학생 혼자(자기주도) 가입 — 만 14세 이상만. '로그인 가능한 자녀'(1인 가족)로 만들어 기존 구조 재사용.
+authRoutes.post('/auth/student/signup', async (c) => {
+  const db = c.env.DB
+  const body = await c.req.json<{ email?: string; password?: string; name?: string; birthYear?: number; consent?: boolean }>()
+  const email = (body.email ?? '').trim().toLowerCase()
+  const password = body.password ?? ''
+  const name = (body.name ?? '').trim()
+  const birthYear = Number(body.birthYear)
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: 'invalid_email' }, 400)
+  if (password.length < 6) return c.json({ error: 'weak_password' }, 400)
+  if (!name) return c.json({ error: 'missing_fields' }, 400)
+  if (!Number.isInteger(birthYear) || birthYear < 1990 || birthYear > new Date().getFullYear()) return c.json({ error: 'invalid_birth_year' }, 400)
+  if (ageFromBirthYear(birthYear) < CONSENT_AGE) return c.json({ error: 'too_young' }, 400) // 14세 미만은 부모와 함께
+  if (body.consent !== true) return c.json({ error: 'consent_required' }, 400)
+
+  const suBucket = `su:${clientIp(c)}`
+  if (await isThrottled(db, suBucket, 5, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
+  const existing = await db.prepare('SELECT id FROM members WHERE email = ?').bind(email).first()
+  if (existing) return c.json({ error: 'email_taken' }, 409)
+
+  const now = Date.now()
+  const familyId = randomId('fam')
+  const memberId = randomId('mem')
+  const code = await freshInviteCode(db)
+  const pwHash = await hashPassword(password)
+  await db.batch([
+    db.prepare('INSERT INTO families (id, name, invite_code, created_at) VALUES (?, ?, ?, ?)').bind(familyId, `${name}의 공간`, code, now),
+    db.prepare(
+      'INSERT INTO members (id, family_id, role, display_name, email, password_hash, birth_year, points, consent_at, consent_by, created_at) VALUES (?, ?, \'child\', ?, ?, ?, ?, 0, ?, ?, ?)',
+    ).bind(memberId, familyId, name, email, pwHash, birthYear, now, memberId, now),
+  ])
+  await recordFail(db, suBucket, WINDOW)
+  const token = await createSession(db, { id: memberId, family_id: familyId, role: 'child' })
+  c.header('Set-Cookie', sessionCookie(token))
+  const session: SessionRow = { token, member_id: memberId, family_id: familyId, role: 'child', expires_at: now }
+  return c.json(await loadMe(db, session))
+})
+
 authRoutes.post('/auth/parent/login', async (c) => {
   const db = c.env.DB
   const body = await c.req.json<{ email?: string; password?: string }>()
@@ -142,17 +181,18 @@ authRoutes.post('/auth/parent/login', async (c) => {
 
   const bucket = `pl:${email}`
   if (await isThrottled(db, bucket, 8, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
+  // 이메일 로그인은 부모 + 혼자(자기주도) 학생(로그인 가능한 자녀) 모두 처리
   const member = await db
-    .prepare('SELECT id, family_id, role, password_hash FROM members WHERE email = ? AND role = \'parent\'')
+    .prepare('SELECT id, family_id, role, password_hash FROM members WHERE email = ? AND password_hash IS NOT NULL')
     .bind(email).first<MemberRow>()
   if (!member || !member.password_hash || !(await verifyPassword(password, member.password_hash))) {
     await recordFail(db, bucket, WINDOW)
     return c.json({ error: 'invalid_credentials' }, 401)
   }
   await clearThrottle(db, bucket)
-  const token = await createSession(db, { id: member.id, family_id: member.family_id, role: 'parent' })
+  const token = await createSession(db, { id: member.id, family_id: member.family_id, role: member.role })
   c.header('Set-Cookie', sessionCookie(token))
-  const session: SessionRow = { token, member_id: member.id, family_id: member.family_id, role: 'parent', expires_at: Date.now() }
+  const session: SessionRow = { token, member_id: member.id, family_id: member.family_id, role: member.role, expires_at: Date.now() }
   return c.json(await loadMe(db, session))
 })
 

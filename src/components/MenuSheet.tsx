@@ -35,6 +35,14 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
+        {!isParent && me.member?.selfManaged && me.family && (
+          <div className="sheet-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+            <span className="rl">부모님 초대코드</span>
+            <span className="rv" style={{ letterSpacing: '.12em', fontFamily: 'var(--round)', fontSize: 18 }}>{me.family.inviteCode}</span>
+            <span className="hint" style={{ margin: 0 }}>부모님이 ‘부모님과 함께 시작 → 기존 가족 참여’에서 이 코드로 함께할 수 있어요. 나는 계속 스스로 관리해요 🙂</span>
+          </div>
+        )}
+
         {isParent && me.children && me.children.length > 0 && (
           <div className="sheet-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
             <span className="rl">자녀 보기</span>

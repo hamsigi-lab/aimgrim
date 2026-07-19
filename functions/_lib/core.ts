@@ -162,7 +162,7 @@ export async function authChild(
 /** 현재 세션의 사용자/가족/자녀 목록 (프론트 부트스트랩용) */
 export async function loadMe(db: D1Database, session: SessionRow) {
   const member = await db
-    .prepare('SELECT id, family_id, role, parent_kind, display_name, birth_year, points FROM members WHERE id = ?')
+    .prepare('SELECT id, family_id, role, parent_kind, display_name, email, birth_year, points FROM members WHERE id = ?')
     .bind(session.member_id).first<MemberRow>()
   if (!member) return null
   const family = await db
@@ -174,7 +174,11 @@ export async function loadMe(db: D1Database, session: SessionRow) {
 
   return {
     authenticated: true as const,
-    member: { id: member.id, name: member.display_name, role: member.role, parentKind: member.parent_kind },
+    member: {
+      id: member.id, name: member.display_name, role: member.role, parentKind: member.parent_kind,
+      // 혼자(자기주도) 학생 = 로그인(이메일) 가능한 자녀 → 부모 초대코드 노출용
+      selfManaged: member.role === 'child' && !!member.email,
+    },
     family: family ? { id: family.id, name: family.name, inviteCode: family.invite_code } : null,
     children: children.results.map((c) => ({
       id: c.id, name: c.display_name, birthYear: c.birth_year,

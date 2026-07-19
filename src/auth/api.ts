@@ -2,7 +2,7 @@
 
 export interface Me {
   authenticated: boolean
-  member?: { id: string; name: string; role: 'parent' | 'child'; parentKind: 'mom' | 'dad' | null }
+  member?: { id: string; name: string; role: 'parent' | 'child'; parentKind: 'mom' | 'dad' | null; selfManaged?: boolean }
   family?: { id: string; name: string; inviteCode: string } | null
   children?: { id: string; name: string; birthYear: number | null; needsConsent: boolean; hasConsent: boolean }[]
 }
@@ -39,6 +39,11 @@ export function parentSignup(input: {
 
 export function parentLogin(input: { email: string; password: string }): Promise<Me> {
   return post<Me>('/api/auth/parent/login', input)
+}
+
+/** 학생 혼자(자기주도) 가입 — 만 14세 이상 */
+export function studentSignup(input: { email: string; password: string; name: string; birthYear: number; consent: boolean }): Promise<Me> {
+  return post<Me>('/api/auth/student/signup', input)
 }
 
 /** 두 번째 부모가 초대코드로 기존 가족에 합류 */
