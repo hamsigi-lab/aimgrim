@@ -5,9 +5,13 @@ import { createSession, sessionCookie, destroySession, clearSessionCookie, type 
 import { verifyGoogleIdToken } from '../_lib/google'
 import {
   type Bindings, type MemberRow, CONSENT_AGE, ageFromBirthYear, requireSession, loadMe,
+  isThrottled, recordFail, clearThrottle,
 } from '../_lib/core'
 
 export const authRoutes = new Hono<{ Bindings: Bindings }>()
+
+const WINDOW = 15 * 60 * 1000 // 15분
+const clientIp = (c: { req: { header: (k: string) => string | undefined } }) => c.req.header('CF-Connecting-IP') ?? 'noip'
 
 // 고유 초대코드 생성
 async function freshInviteCode(db: D1Database): Promise<string> {
@@ -99,6 +103,8 @@ authRoutes.post('/auth/parent/signup', async (c) => {
   if (password.length < 6) return c.json({ error: 'weak_password' }, 400)
   if (!name || !familyName) return c.json({ error: 'missing_fields' }, 400)
 
+  const suBucket = `su:${clientIp(c)}`
+  if (await isThrottled(db, suBucket, 5, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
   const existing = await db.prepare('SELECT id FROM members WHERE email = ?').bind(email).first()
   if (existing) return c.json({ error: 'email_taken' }, 409)
 
@@ -120,6 +126,7 @@ authRoutes.post('/auth/parent/signup', async (c) => {
     ).bind(memberId, familyId, parentKind, name, email, pwHash, now),
   ])
 
+  await recordFail(db, suBucket, WINDOW) // 가입 성공도 IP당 생성 속도 제한에 집계
   const token = await createSession(db, { id: memberId, family_id: familyId, role: 'parent' })
   c.header('Set-Cookie', sessionCookie(token))
   const session: SessionRow = { token, member_id: memberId, family_id: familyId, role: 'parent', expires_at: now }
@@ -132,12 +139,16 @@ authRoutes.post('/auth/parent/login', async (c) => {
   const email = (body.email ?? '').trim().toLowerCase()
   const password = body.password ?? ''
 
+  const bucket = `pl:${email}`
+  if (await isThrottled(db, bucket, 8, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
   const member = await db
     .prepare('SELECT id, family_id, role, password_hash FROM members WHERE email = ? AND role = \'parent\'')
     .bind(email).first<MemberRow>()
   if (!member || !member.password_hash || !(await verifyPassword(password, member.password_hash))) {
+    await recordFail(db, bucket, WINDOW)
     return c.json({ error: 'invalid_credentials' }, 401)
   }
+  await clearThrottle(db, bucket)
   const token = await createSession(db, { id: member.id, family_id: member.family_id, role: 'parent' })
   c.header('Set-Cookie', sessionCookie(token))
   const session: SessionRow = { token, member_id: member.id, family_id: member.family_id, role: 'parent', expires_at: Date.now() }
@@ -158,8 +169,11 @@ authRoutes.post('/auth/parent/join', async (c) => {
   if (password.length < 6) return c.json({ error: 'weak_password' }, 400)
   if (!name) return c.json({ error: 'missing_fields' }, 400)
 
+  const bucket = `pj:${clientIp(c)}`
+  if (await isThrottled(db, bucket, 12, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
   const family = await db.prepare('SELECT id FROM families WHERE invite_code = ?').bind(code).first<{ id: string }>()
-  if (!family) return c.json({ error: 'invalid_code' }, 404)
+  if (!family) { await recordFail(db, bucket, WINDOW); return c.json({ error: 'invalid_code' }, 404) }
+  await clearThrottle(db, bucket)
   const existing = await db.prepare('SELECT id FROM members WHERE email = ?').bind(email).first()
   if (existing) return c.json({ error: 'email_taken' }, 409)
 
@@ -255,13 +269,16 @@ authRoutes.post('/auth/child/login', async (c) => {
   const childId = body.childId ?? ''
   const pin = (body.pin ?? '').trim()
 
+  const bucket = `cl:${clientIp(c)}`
+  if (await isThrottled(db, bucket, 15, WINDOW)) return c.json({ error: 'too_many_attempts' }, 429)
   const family = await db.prepare('SELECT id FROM families WHERE invite_code = ?').bind(code).first<{ id: string }>()
-  if (!family) return c.json({ error: 'invalid_code' }, 404)
+  if (!family) { await recordFail(db, bucket, WINDOW); return c.json({ error: 'invalid_code' }, 404) }
   const child = await db
     .prepare('SELECT id, family_id, role, pin FROM members WHERE id = ? AND family_id = ? AND role = \'child\'')
     .bind(childId, family.id).first<MemberRow>()
-  if (!child) return c.json({ error: 'child_not_found' }, 404)
-  if (child.pin && child.pin !== pin) return c.json({ error: 'invalid_pin' }, 401)
+  if (!child) { await recordFail(db, bucket, WINDOW); return c.json({ error: 'child_not_found' }, 404) }
+  if (child.pin && child.pin !== pin) { await recordFail(db, bucket, WINDOW); return c.json({ error: 'invalid_pin' }, 401) }
+  await clearThrottle(db, bucket)
 
   const token = await createSession(db, { id: child.id, family_id: child.family_id, role: 'child' })
   c.header('Set-Cookie', sessionCookie(token))

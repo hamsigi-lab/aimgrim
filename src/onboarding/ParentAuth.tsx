@@ -189,6 +189,14 @@ export function ParentAuth({ onBack, onDone, initialMode = 'signup' }: { onBack:
             {mode === 'signup' ? '이미 계정이 있어요 · 로그인' : '처음이에요 · 가족 시작하기'}
           </button>
         </div>
+
+        {mode === 'signup' && (
+          <p className="legal-note">
+            가입하면 <a href="/privacy" target="_blank" rel="noreferrer">개인정보 처리방침</a>과{' '}
+            <a href="/terms" target="_blank" rel="noreferrer">이용약관</a>에 동의하는 것으로 간주됩니다.
+            만 14세 미만 자녀 정보는 법정대리인(부모)이 동의·관리합니다.
+          </p>
+        )}
       </div>
     </div>
   )

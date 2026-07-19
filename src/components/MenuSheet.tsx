@@ -53,6 +53,11 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           <span className="rl">로그아웃</span>
           <button type="button" className="btn ghost sm" onClick={() => { logout(); onClose() }}>로그아웃</button>
         </div>
+
+        <div className="sheet-row" style={{ justifyContent: 'center', gap: 14, borderTop: 'none', paddingTop: 4 }}>
+          <a href="/privacy" target="_blank" rel="noreferrer" className="legal-link">개인정보 처리방침</a>
+          <a href="/terms" target="_blank" rel="noreferrer" className="legal-link">이용약관</a>
+        </div>
       </div>
     </div>
   )

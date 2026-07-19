@@ -101,6 +101,29 @@ export async function requireSession(db: D1Database, cookie: string | null): Pro
   return readSession(db, cookie)
 }
 
+// ── 무차별 대입 차단 (auth_throttle) ──
+/** 이 버킷이 창(window) 안에서 한도를 넘었으면 true(차단) */
+export async function isThrottled(db: D1Database, bucket: string, limit: number, windowMs: number): Promise<boolean> {
+  const row = await db.prepare('SELECT fails, first_at FROM auth_throttle WHERE bucket = ?').bind(bucket).first<{ fails: number; first_at: number }>()
+  if (!row) return false
+  if (Date.now() - row.first_at > windowMs) return false // 창 지남 → 다음 실패 때 리셋됨
+  return row.fails >= limit
+}
+/** 인증 실패 1회 기록 (창 지났으면 리셋) */
+export async function recordFail(db: D1Database, bucket: string, windowMs: number): Promise<void> {
+  const now = Date.now()
+  const row = await db.prepare('SELECT first_at FROM auth_throttle WHERE bucket = ?').bind(bucket).first<{ first_at: number }>()
+  if (!row || now - row.first_at > windowMs) {
+    await db.prepare('INSERT INTO auth_throttle (bucket, fails, first_at) VALUES (?, 1, ?) ON CONFLICT(bucket) DO UPDATE SET fails = 1, first_at = ?').bind(bucket, now, now).run()
+  } else {
+    await db.prepare('UPDATE auth_throttle SET fails = fails + 1 WHERE bucket = ?').bind(bucket).run()
+  }
+}
+/** 성공 시 카운터 정리 */
+export async function clearThrottle(db: D1Database, bucket: string): Promise<void> {
+  await db.prepare('DELETE FROM auth_throttle WHERE bucket = ?').bind(bucket).run()
+}
+
 /** 부모 세션만 통과 (없거나 자녀면 null) */
 export async function readSessionParent(db: D1Database, cookie: string | null): Promise<SessionRow | null> {
   const session = await readSession(db, cookie)
