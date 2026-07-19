@@ -32,7 +32,7 @@ authRoutes.post('/auth/google', async (c) => {
   const clientId = c.env.GOOGLE_CLIENT_ID
   if (!clientId) return c.json({ error: 'google_not_configured' }, 500)
 
-  const body = await c.req.json<{ credential?: string; familyName?: string; parentKind?: string; inviteCode?: string }>()
+  const body = await c.req.json<{ credential?: string; familyName?: string; parentKind?: string; inviteCode?: string; mode?: string; birthYear?: number; consent?: boolean; name?: string }>()
   const claims = await verifyGoogleIdToken(body.credential ?? '', clientId)
   if (!claims) return c.json({ error: 'invalid_token' }, 401)
 
@@ -55,7 +55,29 @@ authRoutes.post('/auth/google', async (c) => {
     return c.json(await loadMe(db, session))
   }
 
-  // 신규 사용자
+  // 신규 사용자 — 혼자(자기주도) 학생: 구글 계정으로 가입 (생년·동의는 구글에 없으므로 한 단계 더 받음)
+  if (body.mode === 'student') {
+    const birthYear = Number(body.birthYear)
+    const sName = (body.name ?? '').trim() || (claims.name ?? '').trim() || '나'
+    if (!Number.isInteger(birthYear) || birthYear < 1990 || birthYear > new Date().getFullYear() || body.consent !== true) {
+      return c.json({ needsStudentInfo: true, name: claims.name ?? '', email: claims.email })
+    }
+    if (ageFromBirthYear(birthYear) < CONSENT_AGE) return c.json({ error: 'too_young' }, 400)
+    const now = Date.now()
+    const familyId = randomId('fam')
+    const memberId = randomId('mem')
+    const code = await freshInviteCode(db)
+    await db.batch([
+      db.prepare('INSERT INTO families (id, name, invite_code, created_at) VALUES (?, ?, ?, ?)').bind(familyId, `${sName}의 공간`, code, now),
+      db.prepare('INSERT INTO members (id, family_id, role, display_name, email, google_sub, birth_year, points, consent_at, consent_by, created_at) VALUES (?, ?, \'child\', ?, ?, ?, ?, 0, ?, ?, ?)')
+        .bind(memberId, familyId, sName, claims.email, claims.sub, birthYear, now, memberId, now),
+    ])
+    const token = await createSession(db, { id: memberId, family_id: familyId, role: 'child' })
+    c.header('Set-Cookie', sessionCookie(token))
+    return c.json(await loadMe(db, { token, member_id: memberId, family_id: familyId, role: 'child', expires_at: now }))
+  }
+
+  // 신규 사용자 — 부모
   const parentKind = body.parentKind === 'dad' ? 'dad' : 'mom'
   const inviteCode2 = (body.inviteCode ?? '').trim().toUpperCase()
   const familyName = (body.familyName ?? '').trim()

@@ -55,12 +55,13 @@ export function parentJoin(input: {
 
 export interface GoogleAuthResult extends Me {
   needsFamily?: boolean
+  needsStudentInfo?: boolean
   name?: string
   email?: string
 }
 export function googleAuth(
   credential: string,
-  opts?: { familyName?: string; parentKind?: 'mom' | 'dad'; inviteCode?: string },
+  opts?: { familyName?: string; parentKind?: 'mom' | 'dad'; inviteCode?: string; mode?: 'student'; birthYear?: number; consent?: boolean; name?: string },
 ): Promise<GoogleAuthResult> {
   return post<GoogleAuthResult>('/api/auth/google', { credential, ...opts })
 }
