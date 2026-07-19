@@ -242,9 +242,11 @@ authRoutes.post('/children', async (c) => {
 
   const now = Date.now()
   const childId = randomId('mem')
+  // 부모가 자녀 등록 시 동의하면 연령과 무관하게 '법정대리인 동의' 기록으로 남긴다.
+  const consented = body.consent === true
   await db.prepare(
     'INSERT INTO members (id, family_id, role, display_name, pin, birth_year, points, consent_at, consent_by, created_at) VALUES (?, ?, \'child\', ?, ?, ?, 0, ?, ?, ?)',
-  ).bind(childId, session.family_id, name, pin, birthYear, needsConsent ? now : null, needsConsent ? session.member_id : null, now).run()
+  ).bind(childId, session.family_id, name, pin, birthYear, consented ? now : null, consented ? session.member_id : null, now).run()
 
   return c.json(await loadMe(db, session))
 })
