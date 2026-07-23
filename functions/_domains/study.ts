@@ -267,6 +267,25 @@ studyRoutes.post('/study/sessions', async (c) => {
   return c.json({ ok: true, id, awarded })
 })
 
+// 세션 편집 (놓친 시간 보정·수정)
+studyRoutes.put('/study/sessions/:id', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const s = await db.prepare('SELECT child_id FROM study_sessions WHERE id = ?').bind(id).first<{ child_id: string }>()
+  if (!s) return c.json({ error: 'not_found' }, 404)
+  if (!(await authForChild(db, c.req.header('Cookie') ?? null, s.child_id))) return c.json({ error: 'unauthorized' }, 401)
+  const body = await c.req.json<{ subjectId?: string; subjectName?: string; color?: string; minutes?: number; note?: string; date?: string }>()
+  const minutes = Math.round(Number(body.minutes ?? 0))
+  if (!(minutes >= 1 && minutes <= 600)) return c.json({ error: 'invalid_minutes' }, 400)
+  const subjectName = (body.subjectName ?? '').trim().slice(0, 20) || '기타'
+  const color = /^#[0-9A-Fa-f]{6}$/.test(body.color ?? '') ? body.color! : '#7FB2F0'
+  const note = (body.note ?? '').trim().slice(0, 80) || null
+  const date = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : null
+  await db.prepare('UPDATE study_sessions SET subject_id = ?, subject_name = ?, color = ?, minutes = ?, note = ?, the_date = COALESCE(?, the_date) WHERE id = ?')
+    .bind(body.subjectId ?? null, subjectName, color, minutes, note, date, id).run()
+  return c.json({ ok: true })
+})
+
 // 세션 삭제
 studyRoutes.delete('/study/sessions/:id', async (c) => {
   const db = c.env.DB

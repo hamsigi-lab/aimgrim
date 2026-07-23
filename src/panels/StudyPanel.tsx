@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import {
-  getStudy, createSession, deleteSession, createSubject, DEMO_FAMILY,
-  type StudySnapshot, type Subject, type StudyDay, type StudyGoal,
+  getStudy, createSession, updateSession, deleteSession, createSubject, DEMO_FAMILY,
+  type StudySnapshot, type Subject, type StudyDay, type StudyGoal, type StudySession,
 } from '../api'
 import { StudyGoalProgress } from '../components/StudyGoalProgress'
 import { StudyGoalEditor } from '../components/StudyGoalEditor'
@@ -51,7 +51,7 @@ export function StudyPanel() {
   const [tick, setTick] = useState(0)
   const [subject, setSubject] = useState<Subject | null>(null)
   const [pomodoro, setPomodoro] = useState(() => readTimer(STORE_KEY)?.pomodoro ?? false)
-  const [saveSheet, setSaveSheet] = useState<{ minutes: number } | null>(null)
+  const [saveSheet, setSaveSheet] = useState<{ mode: 'timer' | 'manual' | 'edit'; minutes?: number; existing?: StudySession } | null>(null)
   const [goalEdit, setGoalEdit] = useState<StudyGoal | 'new' | null>(null)
   const intRef = useRef<number | null>(null)
 
@@ -90,7 +90,7 @@ export function StudyPanel() {
     const total = elapsedSec
     setBaseSec(0); setStartedAt(null)
     const minutes = Math.round(total / 60)
-    if (minutes >= 1) setSaveSheet({ minutes })
+    if (minutes >= 1) setSaveSheet({ mode: 'timer', minutes })
   }
   function reset() { setBaseSec(0); setStartedAt(null) }
 
@@ -144,6 +144,12 @@ export function StudyPanel() {
         </label>
       </div>
 
+      {canManage && (
+        <button type="button" className="manual-add" onClick={() => setSaveSheet({ mode: 'manual' })}>
+          ⌨ 타이머를 못 켰나요? 공부한 시간 직접 입력
+        </button>
+      )}
+
       {/* 통계 뷰 전환 */}
       <div className="view-seg" role="tablist" aria-label="기간 전환" style={{ padding: '4px 0 8px' }}>
         {VIEWS.map((v) => (
@@ -152,13 +158,13 @@ export function StudyPanel() {
         ))}
       </div>
 
-      {view === 'today' && <TodayView data={data} canManage={canManage} onChanged={load} />}
+      {view === 'today' && <TodayView data={data} canManage={canManage} onChanged={load} onEdit={(s) => setSaveSheet({ mode: 'edit', existing: s })} />}
       {view === 'week' && <WeekView data={data} />}
       {view === 'month' && <MonthView data={data} />}
 
       {saveSheet && (
-        <SessionSaveSheet minutes={saveSheet.minutes} subject={subject} subjects={data.subjects}
-          childId={childId} pomodoro={pomodoro}
+        <SessionSheet mode={saveSheet.mode} existing={saveSheet.existing} initialMinutes={saveSheet.minutes}
+          subject={subject} subjects={data.subjects} childId={childId} pomodoro={pomodoro} today={data.date}
           onClose={() => setSaveSheet(null)}
           onSaved={(awarded) => { setSaveSheet(null); load(); if (awarded > 0) { setGain(awarded); refresh() } }} />
       )}
@@ -206,28 +212,54 @@ function SubjectPicker({ subjects, value, onChange, childId, canManage, onAdded 
   )
 }
 
-/* ── 세션 저장 시트 ── */
-function SessionSaveSheet({ minutes, subject, subjects, childId, pomodoro, onClose, onSaved }: {
-  minutes: number; subject: Subject | null; subjects: Subject[]; childId: string; pomodoro: boolean
-  onClose: () => void; onSaved: (awarded: number) => void
+/* ── 세션 시트 — 타이머 저장 / 직접 입력(놓친 시간) / 편집 ── */
+function SessionSheet({ mode, existing, initialMinutes, subject, subjects, childId, pomodoro, today, onClose, onSaved }: {
+  mode: 'timer' | 'manual' | 'edit'
+  existing?: StudySession
+  initialMinutes?: number
+  subject: Subject | null
+  subjects: Subject[]
+  childId: string
+  pomodoro: boolean
+  today: string
+  onClose: () => void
+  onSaved: (awarded: number) => void
 }) {
-  const [subj, setSubj] = useState<Subject | null>(subject ?? subjects[0] ?? null)
-  const [min, setMin] = useState(minutes)
-  const [note, setNote] = useState('')
+  const initSubj = existing
+    ? (subjects.find((s) => s.id === existing.subjectId) ?? { id: existing.subjectId ?? '', name: existing.subjectName, color: existing.color } as Subject)
+    : (subject ?? subjects[0] ?? null)
+  const initMin = existing?.minutes ?? initialMinutes ?? 0
+  const [subj, setSubj] = useState<Subject | null>(initSubj)
+  const [h, setH] = useState(Math.floor(initMin / 60))
+  const [m, setM] = useState(initMin % 60)
+  const [note, setNote] = useState(existing?.note ?? '')
+  const [date, setDate] = useState(today)
   const [busy, setBusy] = useState(false)
+  const min = h * 60 + m
+  const title = mode === 'edit' ? '순공 기록 고치기 ✎' : mode === 'manual' ? '공부한 시간 직접 입력 ⌨' : `순공 ${fmt(min)} 기록 ⏱`
+
   async function save() {
     if (!subj || min < 1) return
     setBusy(true)
     try {
-      const res = await createSession({ childId, subjectId: subj.id, subjectName: subj.name, color: subj.color, minutes: min, note: note.trim(), mode: pomodoro ? 'pomodoro' : 'stopwatch' })
-      onSaved(res.awarded ?? 0)
+      if (mode === 'edit' && existing) {
+        await updateSession(existing.id, { subjectId: subj.id, subjectName: subj.name, color: subj.color, minutes: min, note: note.trim(), date })
+        onSaved(0)
+      } else {
+        const res = await createSession({ childId, subjectId: subj.id, subjectName: subj.name, color: subj.color, minutes: min, note: note.trim(), mode: pomodoro ? 'pomodoro' : 'stopwatch', date })
+        onSaved(res.awarded ?? 0)
+      }
     } catch { setBusy(false) }
   }
+  async function remove() { if (existing) { setBusy(true); try { await deleteSession(existing.id); onSaved(0) } catch { setBusy(false) } } }
+
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="공부 시간 기록">
         <div className="grip" />
-        <h3>순공 {fmt(min)} 기록 ⏱</h3>
+        <button type="button" className="sheet-close" aria-label="닫기" onClick={onClose}>✕</button>
+        <h3>{title}</h3>
+        {mode === 'manual' && <p className="note-sub">타이머를 못 켰어도 괜찮아요. 공부한 만큼 직접 넣어요.</p>}
         <div className="form" style={{ marginTop: 10 }}>
           <div className="field">
             <label>과목</label>
@@ -240,18 +272,33 @@ function SessionSaveSheet({ minutes, subject, subjects, childId, pomodoro, onClo
             </div>
           </div>
           <div className="field">
-            <label>시간 (분)</label>
-            <div className="stepper">
-              <button type="button" onClick={() => setMin((m) => Math.max(1, m - 5))} aria-label="줄이기">−</button>
-              <span className="pv">{min}분</span>
-              <button type="button" onClick={() => setMin((m) => Math.min(600, m + 5))} aria-label="늘리기">+</button>
+            <label>공부한 시간</label>
+            <div className="hm-row">
+              <div className="stepper">
+                <button type="button" onClick={() => setH((x) => Math.max(0, x - 1))} aria-label="시간 줄이기">−</button>
+                <span className="pv">{h}시간</span>
+                <button type="button" onClick={() => setH((x) => Math.min(12, x + 1))} aria-label="시간 늘리기">+</button>
+              </div>
+              <div className="stepper">
+                <button type="button" onClick={() => setM((x) => Math.max(0, x - 5))} aria-label="분 줄이기">−</button>
+                <span className="pv">{m}분</span>
+                <button type="button" onClick={() => setM((x) => Math.min(55, x + 5))} aria-label="분 늘리기">+</button>
+              </div>
             </div>
+            <span className="hint">총 {fmt(min)}</span>
           </div>
+          {mode !== 'timer' && (
+            <div className="field">
+              <label htmlFor="s-date">날짜</label>
+              <input id="s-date" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="s-note">무엇을 공부했어? (선택)</label>
             <input id="s-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="예: 수학 32~35쪽" maxLength={60} />
           </div>
-          <button type="button" className="btn primary block" disabled={busy || !subj} onClick={save}>{busy ? '저장 중…' : '기록하기'}</button>
+          <button type="button" className="btn primary block" disabled={busy || !subj || min < 1} onClick={save}>{busy ? '저장 중…' : mode === 'edit' ? '고치기' : '기록하기'}</button>
+          {mode === 'edit' && <button type="button" className="linkbtn" style={{ color: 'var(--crit)' }} disabled={busy} onClick={remove}>이 기록 삭제</button>}
         </div>
       </div>
     </div>
@@ -259,7 +306,7 @@ function SessionSaveSheet({ minutes, subject, subjects, childId, pomodoro, onClo
 }
 
 /* ── 오늘: 총합 + 과목별 가로 막대 + 세션 리스트 ── */
-function TodayView({ data, canManage, onChanged }: { data: StudySnapshot; canManage: boolean; onChanged: () => void }) {
+function TodayView({ data, canManage, onChanged, onEdit }: { data: StudySnapshot; canManage: boolean; onChanged: () => void; onEdit: (s: StudySession) => void }) {
   const { sessions, totalMin } = data.today
   const bySub = useMemo(() => {
     const m = new Map<string, { name: string; color: string; min: number }>()
@@ -285,18 +332,25 @@ function TodayView({ data, canManage, onChanged }: { data: StudySnapshot; canMan
         </>
       )}
 
-      <div className="sechead" style={{ marginTop: 14 }}><h3>오늘 기록</h3><span className="count">{sessions.length}개</span></div>
+      <div className="sechead" style={{ marginTop: 14 }}><h3>오늘 기록</h3><span className="count">탭해서 고치기</span></div>
       {sessions.map((s) => (
         <div key={s.id} className="sess">
           <span className="sess-dot" style={{ background: s.color }} aria-hidden="true" />
-          <span className="sess-mid">
-            <span className="sess-t">{s.subjectName} · {fmt(s.minutes)}</span>
-            {s.note && <span className="sess-note">{s.note}</span>}
-          </span>
+          {canManage ? (
+            <button type="button" className="sess-mid sess-edit" onClick={() => onEdit(s)}>
+              <span className="sess-t">{s.subjectName} · {fmt(s.minutes)}</span>
+              {s.note && <span className="sess-note">{s.note}</span>}
+            </button>
+          ) : (
+            <span className="sess-mid">
+              <span className="sess-t">{s.subjectName} · {fmt(s.minutes)}</span>
+              {s.note && <span className="sess-note">{s.note}</span>}
+            </span>
+          )}
           {canManage && <button type="button" className="sess-del" aria-label="삭제" onClick={() => remove(s.id)}>🗑</button>}
         </div>
       ))}
-      {sessions.length === 0 && <p className="empty-hint">위 타이머로 공부를 시작해 오늘 순공을 쌓아봐요 🌱</p>}
+      {sessions.length === 0 && <p className="empty-hint">타이머로 시작하거나, 위 <b>‘시간 직접 입력’</b>으로 공부한 시간을 넣어요 🌱</p>}
     </div>
   )
 }
