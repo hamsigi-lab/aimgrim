@@ -30,6 +30,30 @@ export interface TaskRow {
   recur?: string | null; goal_id?: string | null; recur_days?: number | null
   note?: string | null; minutes?: number | null
   start_date?: string | null; end_date?: string | null
+  start_min?: number | null; end_min?: number | null
+}
+
+/** 자유 텍스트 '언제'(예: 오후 4시, 9:30, 저녁)를 자정 기준 분으로 추정. 못 읽으면 null(인박스). */
+export function parseTimeLabel(label?: string | null): number | null {
+  if (!label) return null
+  const s = label.trim()
+  const m = s.match(/(오전|오후|저녁|밤)?\s*(\d{1,2})\s*(?:시|:)\s*(\d{1,2})?/)
+  if (m) {
+    let h = parseInt(m[2], 10)
+    const min = m[3] ? parseInt(m[3], 10) : 0
+    const ap = m[1]
+    if ((ap === '오후' || ap === '저녁' || ap === '밤') && h < 12) h += 12
+    if (ap === '오전' && h === 12) h = 0
+    if (h >= 0 && h <= 23 && min >= 0 && min < 60) return h * 60 + min
+  }
+  if (/새벽/.test(s)) return 6 * 60
+  if (/아침/.test(s)) return 8 * 60
+  if (/오전/.test(s)) return 9 * 60
+  if (/점심/.test(s)) return 12 * 60
+  if (/오후/.test(s)) return 15 * 60
+  if (/저녁/.test(s)) return 19 * 60
+  if (/(자기\s*전|밤|취침)/.test(s)) return 21 * 60
+  return null
 }
 
 /** recur/시작일 기준으로 [aStart, aEnd] 범위에서 이 할일이 나타나는 날 수 (endISO가 있으면 그날까지만) */

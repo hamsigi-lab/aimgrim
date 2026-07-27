@@ -12,6 +12,16 @@ const RECURS: { id: Recur; label: string }[] = [
 ]
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
+// 느슨한 시간블록 프리셋 (분) — 초등도 쉽게. 직접 시각도 가능.
+const TIME_BLOCKS: { label: string; min: number }[] = [
+  { label: '아침', min: 480 }, { label: '오전', min: 600 }, { label: '점심', min: 720 },
+  { label: '오후', min: 900 }, { label: '저녁', min: 1140 }, { label: '밤', min: 1260 },
+]
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const minToTime = (m: number | null) => (m == null ? '' : `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`)
+const timeToMin = (t: string): number | null => { const [h, m] = t.split(':').map(Number); return Number.isFinite(h) ? h * 60 + (m || 0) : null }
+function fmtLabel(m: number): string { const h = Math.floor(m / 60), mm = m % 60; const ap = h < 12 ? '오전' : '오후'; let hh = h % 12; if (hh === 0) hh = 12; return `${ap} ${hh}${mm ? ':' + pad2(mm) : '시'}` }
+
 const CATS: { id: Category; label: string; emoji: string }[] = [
   { id: 'study', label: '공부', emoji: '📚' },
   { id: 'life', label: '생활', emoji: '🌿' },
@@ -53,7 +63,6 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
   const [title, setTitle] = useState(existing?.title ?? prefill?.title ?? '')
   const [category, setCategory] = useState<Category>(existing?.category ?? prefill?.category ?? 'study')
   const [points, setPoints] = useState(existing?.points ?? (period === 'day' ? 10 : 40))
-  const [timeLabel, setTimeLabel] = useState(existing?.timeLabel ?? '')
   const [progress, setProgress] = useState(existing?.progress ?? 0)
   const [progressLabel, setProgressLabel] = useState(existing?.progressLabel ?? '')
   const [recur, setRecur] = useState<Recur>(existing?.recur ?? defaultRecur ?? 'daily')
@@ -69,6 +78,9 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
   const [per, setPer] = useState<'week' | 'month'>(period === 'week' ? 'week' : 'month')
   // 하루 할일 반복 종료일 (언제까지)
   const [tEnd, setTEnd] = useState(existing?.endDate ?? prefill?.endDate ?? '')
+  // 시간블록 (선택) — 없으면 '언제든 할 일'(인박스)
+  const [startMin, setStartMin] = useState<number | null>(existing?.startMin ?? null)
+  const [endMin, setEndMin] = useState<number | null>(existing?.endMin ?? null)
 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -87,10 +99,12 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
     try {
       const rd = recur === 'days' ? recurDays : undefined
       const goalDates = isGoal ? { startDate: gStart || undefined, endDate: gEnd || undefined } : { endDate: tEnd || undefined }
+      const dayTime = !isGoal ? { startMin: startMin ?? undefined, endMin: (endMin != null && startMin != null && endMin > startMin) ? endMin : undefined } : {}
+      const tl = !isGoal ? (startMin != null ? fmtLabel(startMin) : '') : (existing?.timeLabel ?? '')
       if (editing) {
-        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined, ...goalDates })
+        await updateTask(existing!.id, { title: title.trim(), category, points, timeLabel: tl, progress, progressLabel, recur, recurDays: rd, goalId: goalId ?? undefined, ...goalDates, ...dayTime })
       } else {
-        await createTask({ childId, title: title.trim(), category, period: isGoal ? per : 'day', points, timeLabel, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined, ...goalDates })
+        await createTask({ childId, title: title.trim(), category, period: isGoal ? per : 'day', points, timeLabel: tl, progress, progressLabel, recur, recurDays: rd, date: targetDate, goalId: goalId ?? undefined, ...goalDates, ...dayTime })
       }
       onSaved(); onClose()
     } catch { setErr('저장에 실패했어요.'); setBusy(false) }
@@ -185,8 +199,19 @@ export function TaskEditor({ childId, period, existing, targetDate, defaultRecur
                 </div>
               )}
               <div className="field">
-                <label htmlFor="t-time">언제 (선택)</label>
-                <input id="t-time" value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="예: 오후 4시, 자기 전" maxLength={20} />
+                <label>시간 (선택) — 언제 할까요?</label>
+                <div className="tb-chips">
+                  <button type="button" className={`tb-chip${startMin == null ? ' on' : ''}`} onClick={() => { setStartMin(null); setEndMin(null) }}>시간 없음</button>
+                  {TIME_BLOCKS.map((b) => (
+                    <button type="button" key={b.min} className={`tb-chip${startMin === b.min ? ' on' : ''}`} onClick={() => { setStartMin(b.min); setEndMin(null) }}>{b.label}</button>
+                  ))}
+                </div>
+                <div className="daterange" style={{ marginTop: 8 }}>
+                  <input type="time" aria-label="시작 시각" value={minToTime(startMin)} onChange={(e) => setStartMin(timeToMin(e.target.value))} />
+                  <span>~</span>
+                  <input type="time" aria-label="끝 시각(선택)" value={minToTime(endMin)} onChange={(e) => setEndMin(timeToMin(e.target.value))} />
+                </div>
+                <span className="hint">시간을 정하면 그 시간에 <b>‘지금 할 일’</b>로 떠요. 안 정해도 괜찮아요(언제든 할 일).</span>
               </div>
               {goalOptions.length > 0 && (
                 <div className="field">

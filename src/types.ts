@@ -41,6 +41,10 @@ export interface ScheduleItem {
   startDate?: string | null
   /** 목표 실천 기간 종료 / 하루 할일 반복 종료 (YYYY-MM-DD) */
   endDate?: string | null
+  /** 시간블록 시작 (자정 기준 분, 예 540=9:00). null=시간 미지정(인박스) */
+  startMin?: number | null
+  /** 시간블록 종료 (분, 선택) */
+  endMin?: number | null
 }
 
 /** 목표(주/월) — 그 아래 하위 계획(daily 실천)을 중첩해 담는다 */

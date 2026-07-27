@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { PlanList } from '../components/PlanList'
+import { TaskRow } from '../components/TaskRow'
 import { TaskEditor, type Prefill } from '../components/TaskEditor'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
@@ -11,6 +12,7 @@ import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem, GoalItem } from '../types'
 
 const fh = (m: number) => `${Math.round((m / 60) * 10) / 10}시간`
+function fmtT(m: number): string { const h = Math.floor(m / 60), mm = m % 60; const ap = h < 12 ? '오전' : '오후'; const hh = h % 12 || 12; return `${ap} ${hh}${mm ? ':' + String(mm).padStart(2, '0') : '시'}` }
 function Check() {
   return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
@@ -20,6 +22,9 @@ function Gear() {
       <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.04-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z" />
     </svg>
   )
+}
+function NowMarker({ min, atEnd }: { min: number; atEnd?: boolean }) {
+  return <div className={`now-marker${atEnd ? ' end' : ''}`}><span className="nm-dot" aria-hidden="true" /><span className="nm-lab">지금 {fmtT(min)}</span><span className="nm-line" aria-hidden="true" /></div>
 }
 
 export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => void; onGoToGoals?: () => void }) {
@@ -34,6 +39,8 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
   const [otherTasks, setOtherTasks] = useState<ScheduleItem[] | null>(null)
   const [otherBusy, setOtherBusy] = useState(false)
   const [study, setStudy] = useState<StudySnapshot | null>(null)
+  const [nowMin, setNowMin] = useState(() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() })
+  useEffect(() => { const t = window.setInterval(() => { const d = new Date(); setNowMin(d.getHours() * 60 + d.getMinutes()) }, 60000); return () => window.clearInterval(t) }, [])
 
   const fam = status === 'demo' ? DEMO_FAMILY : familyId ?? DEMO_FAMILY
   const today = snapshot?.today ?? ''
@@ -66,6 +73,14 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
   const canToggle = !isFuture
   // 이 날짜가 기간에 든 목표 = 계획에 자동 반영 (목표 탭에서 기간만 정하면 여기 보임)
   const activeGoals = snapshot.goals.filter((g) => (!g.startDate || g.startDate <= date) && (!g.endDate || g.endDate >= date))
+  // 시간블록형: 시간 있는 할일(타임라인) vs 시간 없는 할일(인박스)
+  const timed = tasks.filter((t) => t.startMin != null).slice().sort((a, b) => (a.startMin! - b.startMin!))
+  const untimed = tasks.filter((t) => t.startMin == null)
+  const notDoneTimed = timed.filter((t) => !t.done)
+  const current = isToday ? [...notDoneTimed].reverse().find((t) => t.startMin! <= nowMin && (t.endMin == null || nowMin < t.endMin)) : undefined
+  const upNext = isToday ? notDoneTimed.find((t) => t.startMin! > nowMin) : undefined
+  const nowTask = current ?? upNext
+  const markerIdx = isToday ? timed.findIndex((t) => t.startMin! > nowMin) : -1
 
   function refetchOther() {
     fetchDayTasks(date, fam, childId).then((r) => setOtherTasks(r.tasks)).catch(() => {})
@@ -107,6 +122,21 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
         {!isToday && <button type="button" className="date-today" onClick={() => setViewDate(today)}>오늘로</button>}
         {isToday && snapshot.streak > 0 && <span className="streak-chip">🔥 {snapshot.streak}일째</span>}
       </div>
+
+      {/* 지금 할 일 — 현재 시각에 해야 할 블록 하나를 크게. '지금 뭐 하지?' 해결 */}
+      {isToday && nowTask && (
+        <div className={`now-card${current ? ' active' : ''}`}>
+          <div className="nc-lab">{current ? '🔵 지금 할 일' : '⏭ 곧 할 일'} · {fmtT(nowTask.startMin!)}{nowTask.endMin ? `~${fmtT(nowTask.endMin)}` : ''}</div>
+          <div className="nc-main">
+            <button type="button" className="nc-check" disabled={!canToggle} aria-label="완료" onClick={() => canToggle && handleToggle(nowTask.id)}><Check /></button>
+            <span className="nc-title">{nowTask.title}</span>
+            <span className="nc-pts">+{nowTask.points}⭐</span>
+          </div>
+          {nowTask.category === 'study' && onGoToStudy && (
+            <button type="button" className="nc-study" onClick={onGoToStudy}>▶ 순공 타이머 시작</button>
+          )}
+        </div>
+      )}
 
       {/* 순공 요약 — 맨 위에 크게 (탭하면 순공 탭) */}
       {isToday && study && (study.today.totalMin > 0 || study.goals.length > 0) && (
@@ -157,13 +187,34 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
-      <PlanList
-        tasks={tasks} goals={snapshot.goals} forceFlat
-        onToggle={canToggle ? handleToggle : undefined}
-        onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
-        onNote={canManage ? (task) => setNoteFor(task) : undefined}
-        canApprove={isParent && canToggle} onApprove={onApprove}
-      />
+      {/* 오늘 타임라인 — 시간 있는 할일 + '지금' 마커 */}
+      {timed.length > 0 && (
+        <div className="timeline">
+          {timed.map((t, i) => (
+            <div key={t.id}>
+              {isToday && markerIdx === i && <NowMarker min={nowMin} />}
+              <TaskRow task={t}
+                onToggle={canToggle ? handleToggle : undefined}
+                onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
+                onNote={canManage ? (task) => setNoteFor(task) : undefined}
+                canApprove={isParent && canToggle} onApprove={onApprove} />
+            </div>
+          ))}
+          {isToday && markerIdx === -1 && <NowMarker min={nowMin} atEnd />}
+        </div>
+      )}
+
+      {/* 언제든 할 일 — 시간 미지정(인박스) */}
+      {untimed.length > 0 && (
+        <>
+          {timed.length > 0 && <div className="sechead" style={{ marginTop: 14 }}><h3>언제든 할 일</h3></div>}
+          <PlanList tasks={untimed} goals={snapshot.goals} forceFlat
+            onToggle={canToggle ? handleToggle : undefined}
+            onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
+            onNote={canManage ? (task) => setNoteFor(task) : undefined}
+            canApprove={isParent && canToggle} onApprove={onApprove} />
+        </>
+      )}
 
       {tasks.length === 0 && !otherBusy && (
         <p className="empty-hint">

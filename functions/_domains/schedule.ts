@@ -4,7 +4,7 @@ import { randomId } from '../_lib/crypto'
 import {
   type Bindings, type TaskRow, CATEGORIES, PERIODS, authorLabel, familyDate, maxPoints,
   requireSession, authChild, readSessionParent, DAY_RECUR_SQL, dayRecurBinds, isWeekdayOf, dayBitOf,
-  daysToMask, maskToDays, occurrencesInRange,
+  daysToMask, maskToDays, occurrencesInRange, parseTimeLabel,
 } from '../_lib/core'
 
 export const scheduleRoutes = new Hono<{ Bindings: Bindings }>()
@@ -27,6 +27,8 @@ function mapScheduleItem(r: TaskRow) {
     recur: r.recur ?? 'daily', recurDays: maskToDays(r.recur_days), goalId: r.goal_id ?? null,
     note: r.note ?? '', minutes: r.minutes ?? 0,
     startDate: r.start_date ?? null, endDate: r.end_date ?? null,
+    // 저장된 시각이 없으면 기존 '언제' 텍스트에서 추정(무손실 보조)
+    startMin: r.start_min ?? parseTimeLabel(r.time_label), endMin: r.end_min ?? null,
   }
 }
 
@@ -47,7 +49,7 @@ scheduleRoutes.get('/family/:familyId/day', async (c) => {
   const isWeekday = isWeekdayOf(date)
   const rows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, t.start_min, t.end_min, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
@@ -77,7 +79,7 @@ scheduleRoutes.get('/family/:familyId/week', async (c) => {
     const date = d.toISOString().slice(0, 10)
     const rows = await db.prepare(`
       SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-             t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
+             t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, t.start_min, t.end_min, c.done, c.approved, c.note, c.minutes
       FROM tasks t JOIN members am ON am.id = t.author_id
       LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
       WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
@@ -155,7 +157,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   // 반복 규칙(시작일 기준)에 따라 오늘 보여줄 하루 할일만 선별
   const dayRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, t.start_min, t.end_min, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
@@ -254,7 +256,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   // 하위 계획(목표에 연결된 하루 할일) — 목표별로 묶어 목표 탭에서 중첩 표시. c.done은 오늘 기준.
   const subRows = await db.prepare(`
     SELECT t.id, t.title, t.category, t.author_id, t.child_id, am.parent_kind,
-           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, c.done, c.approved, c.note, c.minutes
+           t.points, t.time_label, t.progress, t.progress_label, t.recur, t.recur_days, t.goal_id, t.start_date, t.end_date, t.start_min, t.end_min, c.done, c.approved, c.note, c.minutes
     FROM tasks t JOIN members am ON am.id = t.author_id
     LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
     WHERE t.child_id = ? AND t.period = 'day' AND t.goal_id IS NOT NULL AND substr(t.id,1,3) <> 'gp_'
@@ -396,7 +398,7 @@ scheduleRoutes.post('/tasks', async (c) => {
     childId?: string; title?: string; category?: string; period?: string
     points?: number; timeLabel?: string; progress?: number; progressLabel?: string
     recur?: string; recurDays?: number[]; date?: string; goalId?: string
-    startDate?: string; endDate?: string; autoDaily?: boolean
+    startDate?: string; endDate?: string; autoDaily?: boolean; startMin?: number; endMin?: number
   }>()
   const childId = body.childId ?? ''
   const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
@@ -426,13 +428,16 @@ scheduleRoutes.post('/tasks', async (c) => {
   const isoOk = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
   const gStart = period !== 'day' && isoOk(body.startDate) ? body.startDate! : null
   const tEnd = isoOk(body.endDate) ? body.endDate! : null
+  const minOk = (v?: number) => Number.isInteger(v) && v! >= 0 && v! <= 1440
+  const sMin = period === 'day' && minOk(body.startMin) ? body.startMin! : null
+  const eMin = period === 'day' && sMin != null && minOk(body.endMin) && body.endMin! > sMin ? body.endMin! : null
   await db.prepare(
-    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, start_date, end_date, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, start_date, end_date, start_min, end_min, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, auth.session.family_id, childId, title, category, period, auth.session.member_id, points,
     period === 'day' ? theDate : null, (body.timeLabel ?? '').trim() || null,
-    progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, gStart, tEnd, order?.n ?? 1, now,
+    progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, gStart, tEnd, sMin, eMin, order?.n ?? 1, now,
   ).run()
 
   return c.json({ ok: true, id })
@@ -449,7 +454,7 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   if (!auth) return c.json({ error: 'unauthorized' }, 401)
   if (auth.session.role === 'child' && task.author_id !== auth.session.member_id) return c.json({ error: 'forbidden' }, 403)
 
-  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; recurDays?: number[]; goalId?: string; startDate?: string; endDate?: string; autoDaily?: boolean }>()
+  const body = await c.req.json<{ title?: string; category?: string; points?: number; timeLabel?: string; progress?: number; progressLabel?: string; recur?: string; recurDays?: number[]; goalId?: string; startDate?: string; endDate?: string; autoDaily?: boolean; startMin?: number; endMin?: number }>()
   const title = (body.title ?? '').trim()
   const category = body.category ?? 'life'
   if (!title || !CATEGORIES.has(category)) return c.json({ error: 'invalid_field' }, 400)
@@ -462,10 +467,13 @@ scheduleRoutes.put('/tasks/:id', async (c) => {
   const isoOk = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
   const gStart = task.period !== 'day' && isoOk(body.startDate) ? body.startDate! : null
   const tEnd = isoOk(body.endDate) ? body.endDate! : null
+  const minOk = (v?: number) => Number.isInteger(v) && v! >= 0 && v! <= 1440
+  const sMin = task.period === 'day' && minOk(body.startMin) ? body.startMin! : null
+  const eMin = task.period === 'day' && sMin != null && minOk(body.endMin) && body.endMin! > sMin ? body.endMin! : null
 
   await db.prepare(
-    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ?, recur = ?, recur_days = ?, goal_id = ?, start_date = ?, end_date = ? WHERE id = ?',
-  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, gStart, tEnd, taskId).run()
+    'UPDATE tasks SET title = ?, category = ?, points = ?, time_label = ?, progress = ?, progress_label = ?, recur = ?, recur_days = ?, goal_id = ?, start_date = ?, end_date = ?, start_min = ?, end_min = ? WHERE id = ?',
+  ).bind(title, category, points, (body.timeLabel ?? '').trim() || null, progress, (body.progressLabel ?? '').trim() || null, recur, recurDays, goalId, gStart, tEnd, sMin, eMin, taskId).run()
 
   // 목표를 수정하면, 이 목표로 '담긴' 하루 할일 중 아직 목표 이름 그대로인 것들의 제목/종류도 같이 반영
   // (직접 다른 이름으로 고친 세부 할일은 건드리지 않는다)

@@ -669,6 +669,29 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .hm-row { display: flex; gap: 10px; }
 .hm-row .stepper { flex: 1; }
 
+/* ── 시간블록형 계획: 지금 할 일 카드 · 타임라인 · 시간블록 칩 ── */
+.now-card { background: linear-gradient(135deg, var(--mint-wash), #fff); border: 2px solid var(--mint); border-radius: 20px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 10px 22px -14px rgba(30,142,120,.6); }
+.now-card:not(.active) { border-color: #CDE8E0; border-style: dashed; box-shadow: none; }
+.nc-lab { font-size: 12px; font-weight: 800; color: var(--mint-deep); }
+.nc-main { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.nc-check { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; border: 2.5px solid var(--mint); background: #fff; cursor: pointer; display: grid; place-items: center; padding: 0; -webkit-tap-highlight-color: transparent; }
+.nc-check svg { width: 19px; height: 19px; }
+.nc-check svg path { stroke: var(--mint); }
+.nc-check:active { background: var(--mint-wash); }
+.nc-title { flex: 1; min-width: 0; font-family: var(--round); font-size: 18px; font-weight: 800; color: var(--ink); line-height: 1.25; }
+.nc-pts { font-size: 12px; font-weight: 800; color: var(--gold); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.nc-study { margin-top: 11px; width: 100%; background: var(--mint); color: #fff; border: none; border-radius: 12px; padding: 10px; font-size: 13.5px; font-weight: 800; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.now-marker { display: flex; align-items: center; gap: 8px; margin: 3px 2px; }
+.now-marker .nm-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rose); flex: 0 0 9px; box-shadow: 0 0 0 4px rgba(255,126,166,.18); }
+.nm-lab { font-size: 11px; font-weight: 800; color: var(--rose); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nm-line { flex: 1; height: 2px; background: linear-gradient(90deg, var(--rose), transparent); border-radius: 2px; }
+
+.tb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tb-chip { border: 1.5px solid var(--line); background: #fff; border-radius: 100px; padding: 6px 13px; font-size: 13px; font-weight: 800; color: var(--ink-soft); font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tb-chip.on { border-color: var(--mint); background: var(--mint-wash); color: var(--mint-deep); }
+
 .wbars { display: flex; gap: 6px; align-items: flex-end; padding: 8px 2px 0; }
 .wbar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
 .wbar-track { width: 100%; max-width: 30px; height: 120px; display: flex; align-items: flex-end; }
