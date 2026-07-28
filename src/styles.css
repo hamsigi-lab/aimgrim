@@ -699,6 +699,18 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .ds-time b { display: block; font-family: var(--round); font-size: 14.5px; font-weight: 800; color: var(--mint-deep); }
 .ds-time span { display: block; font-size: 10px; color: var(--ink-faint); margin-top: 1px; }
 .ds-body { min-width: 0; }
+/* 지금 이 시간에 해당하는 행 강조 */
+.dsrow.now .task { border-color: var(--mint); box-shadow: 0 6px 16px -12px rgba(47,183,154,.85); }
+.dsrow.now .ds-time b { color: var(--rose); }
+/* 시간 없는 할일 — 왼쪽 거터에 '＋시간' 빠른 설정 */
+.ds-time.none { display: flex; justify-content: flex-end; align-items: center; }
+.ds-time.none > span { font-size: 11px; color: var(--ink-faint); font-weight: 700; }
+.ds-settime { border: 1.5px dashed var(--line); background: #fff; color: var(--mint-deep); border-radius: 9px; padding: 5px 7px; font-size: 11px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+.ds-settime:active { background: var(--mint-wash); }
+/* 간단 추가 — 매일 반복 체크 */
+.qa-repeat { display: flex; align-items: center; gap: 10px; background: var(--mint-wash); border-radius: 12px; padding: 12px 13px; cursor: pointer; font-size: 14px; font-weight: 800; color: var(--ink); }
+.qa-repeat input { width: 22px; height: 22px; flex: 0 0 22px; accent-color: var(--mint); }
+.qa-repeat em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 
 /* 이 기간 목표 — 얇은 접이식 요약 */
 .plangoals.slim { padding: 0; background: none; border: none; margin-bottom: 12px; }
