@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import { useAuth } from '../auth/AuthProvider'
 import { TaskRow } from '../components/TaskRow'
-import { TaskEditor } from '../components/TaskEditor'
 import { QuickAddTask } from '../components/QuickAddTask'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
@@ -21,9 +20,8 @@ function NowMarker({ min, atEnd }: { min: number; atEnd?: boolean }) {
 export function TodayPanel() {
   const { snapshot, childId, toggleTask, reload, refresh } = useApp()
   const { status, me, familyId } = useAuth()
-  const [editor, setEditor] = useState<ScheduleItem | null>(null) // ✎ 자세히 고치기(별점·목표·삭제)
-  const [adding, setAdding] = useState(false)                     // ＋ 간단 추가
-  const [timeFor, setTimeFor] = useState<ScheduleItem | null>(null) // 시간만 빠르게 정하기
+  const [editor, setEditor] = useState<ScheduleItem | null>(null) // ✎ 고치기(시간·반복·별점·삭제)
+  const [adding, setAdding] = useState(false)                     // ＋ 간단 추가(여러 항목)
   const [noteFor, setNoteFor] = useState<ScheduleItem | null>(null)
   const [encourage, setEncourage] = useState(false)
   const [templates, setTemplates] = useState(false)
@@ -59,11 +57,18 @@ export function TodayPanel() {
   const tasks = isToday ? snapshot.todayTasks : (otherTasks ?? [])
   const canToggle = !isFuture
   // 왼쪽 시간·오른쪽 할일. 시간 있는 건 시간순, 없는 건 '언제든'으로 뒤에.
-  const timed = tasks.filter((t) => t.startMin != null).slice().sort((a, b) => (a.startMin! - b.startMin!))
+  const timed = tasks.filter((t) => t.startMin != null).slice().sort((a, b) => (a.startMin! - b.startMin!) || ((a.endMin ?? 0) - (b.endMin ?? 0)))
   const untimed = tasks.filter((t) => t.startMin == null)
-  const notDoneTimed = timed.filter((t) => !t.done)
-  const current = isToday ? [...notDoneTimed].reverse().find((t) => t.startMin! <= nowMin && (t.endMin == null || nowMin < t.endMin)) : undefined
-  const markerIdx = isToday ? timed.findIndex((t) => t.startMin! > nowMin) : -1
+  // 같은 시간대(시작·끝)끼리 묶어 한 시간 아래 여러 항목으로 표시
+  const groups: { startMin: number; endMin: number | null; items: ScheduleItem[] }[] = []
+  for (const t of timed) {
+    const g = groups[groups.length - 1]
+    if (g && g.startMin === t.startMin && g.endMin === (t.endMin ?? null)) g.items.push(t)
+    else groups.push({ startMin: t.startMin!, endMin: t.endMin ?? null, items: [t] })
+  }
+  const markerIdx = isToday ? groups.findIndex((g) => g.startMin > nowMin) : -1
+  let curIdx = -1
+  if (isToday) for (let i = 0; i < groups.length; i++) { const g = groups[i]; if (g.startMin <= nowMin && (g.endMin == null || nowMin < g.endMin)) curIdx = i }
 
   function refetchOther() {
     fetchDayTasks(date, fam, childId).then((r) => setOtherTasks(r.tasks)).catch(() => {})
@@ -119,29 +124,29 @@ export function TodayPanel() {
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
-      {/* 하루 계획표 — 왼쪽 시간, 오른쪽 할일. 체크하면 완료. */}
+      {/* 하루 계획표 — 왼쪽 시간, 오른쪽 여러 할일. 각 칸 클릭 = 그 칸만 완료(+별점). */}
       {tasks.length > 0 && (
         <div className="dsched">
-          {timed.map((t, i) => (
-            <div key={t.id}>
+          {groups.map((g, i) => (
+            <div key={i}>
               {isToday && markerIdx === i && <NowMarker min={nowMin} />}
-              <div className={`dsrow${current && current.id === t.id ? ' now' : ''}`}>
-                <div className="ds-time"><b>{fmtGut(t.startMin!)}</b>{t.endMin != null && <span>~{fmtGut(t.endMin)}</span>}</div>
-                <div className="ds-body"><TaskRow hideTime {...rowProps(t)} /></div>
+              <div className={`dsgroup${isToday && curIdx === i ? ' now' : ''}`}>
+                <div className="ds-time"><b>{fmtGut(g.startMin)}</b>{g.endMin != null && <span>~{fmtGut(g.endMin)}</span>}</div>
+                <div className="ds-items">
+                  {g.items.map((t) => <TaskRow key={t.id} hideTime {...rowProps(t)} />)}
+                </div>
               </div>
             </div>
           ))}
-          {isToday && markerIdx === -1 && timed.length > 0 && <NowMarker min={nowMin} atEnd />}
-          {untimed.map((t) => (
-            <div key={t.id} className="dsrow">
-              <div className="ds-time none">
-                {canManage && isToday
-                  ? <button type="button" className="ds-settime" onClick={() => setTimeFor(t)} aria-label="시간 정하기">＋시간</button>
-                  : <span>언제든</span>}
+          {isToday && markerIdx === -1 && groups.length > 0 && <NowMarker min={nowMin} atEnd />}
+          {untimed.length > 0 && (
+            <div className="dsgroup">
+              <div className="ds-time none"><span>언제든</span></div>
+              <div className="ds-items">
+                {untimed.map((t) => <TaskRow key={t.id} hideTime {...rowProps(t)} />)}
               </div>
-              <div className="ds-body"><TaskRow hideTime {...rowProps(t)} /></div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -176,13 +181,10 @@ export function TodayPanel() {
       )}
 
       {adding && canManage && (
-        <QuickAddTask childId={childId} targetDate={date} onClose={() => setAdding(false)} onSaved={afterSave} />
-      )}
-      {timeFor && canManage && (
-        <QuickAddTask childId={childId} targetDate={date} existing={timeFor} onClose={() => setTimeFor(null)} onSaved={afterSave} />
+        <QuickAddTask childId={childId} targetDate={date} canSetPoints={isParent} onClose={() => setAdding(false)} onSaved={afterSave} />
       )}
       {editor && canManage && (
-        <TaskEditor childId={childId} period="day" existing={editor} targetDate={date}
+        <QuickAddTask childId={childId} targetDate={date} existing={editor} canSetPoints={isParent}
           onClose={() => setEditor(null)} onSaved={afterSave} />
       )}
       {noteFor && canManage && (

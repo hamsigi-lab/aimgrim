@@ -698,19 +698,30 @@ textarea.msg-input:focus { outline: none; border-color: var(--mint); box-shadow:
 .ds-time { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .ds-time b { display: block; font-family: var(--round); font-size: 14.5px; font-weight: 800; color: var(--mint-deep); }
 .ds-time span { display: block; font-size: 10px; color: var(--ink-faint); margin-top: 1px; }
-.ds-body { min-width: 0; }
-/* 지금 이 시간에 해당하는 행 강조 */
-.dsrow.now .task { border-color: var(--mint); box-shadow: 0 6px 16px -12px rgba(47,183,154,.85); }
-.dsrow.now .ds-time b { color: var(--rose); }
-/* 시간 없는 할일 — 왼쪽 거터에 '＋시간' 빠른 설정 */
-.ds-time.none { display: flex; justify-content: flex-end; align-items: center; }
-.ds-time.none > span { font-size: 11px; color: var(--ink-faint); font-weight: 700; }
-.ds-settime { border: 1.5px dashed var(--line); background: #fff; color: var(--mint-deep); border-radius: 9px; padding: 5px 7px; font-size: 11px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
-.ds-settime:active { background: var(--mint-wash); }
+/* 한 시간대(그룹) = 왼쪽 시간 + 오른쪽 여러 할일 */
+.dsgroup { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: start; }
+.dsgroup .ds-time { padding-top: 12px; }
+.ds-items { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* 지금 이 시간대 강조 */
+.dsgroup.now .task { border-color: var(--mint); box-shadow: 0 6px 16px -12px rgba(47,183,154,.85); }
+.dsgroup.now .ds-time b { color: var(--rose); }
+/* 시간 없는 할일 — '언제든' */
+.ds-time.none { display: flex; justify-content: flex-end; align-items: flex-start; padding-top: 12px; }
+.ds-time.none > span { font-size: 11px; color: var(--ink-faint); font-weight: 800; }
+
 /* 간단 추가 — 매일 반복 체크 */
 .qa-repeat { display: flex; align-items: center; gap: 10px; background: var(--mint-wash); border-radius: 12px; padding: 12px 13px; cursor: pointer; font-size: 14px; font-weight: 800; color: var(--ink); }
 .qa-repeat input { width: 22px; height: 22px; flex: 0 0 22px; accent-color: var(--mint); }
 .qa-repeat em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+/* 간단 추가 — 여러 항목 입력 */
+.qa-additem { display: flex; gap: 8px; }
+.qa-additem input { flex: 1; min-width: 0; }
+.qa-add-btn { flex: 0 0 46px; width: 46px; border: 1.5px solid var(--mint); background: var(--mint-wash); color: var(--mint-deep); border-radius: 12px; font-size: 22px; font-weight: 800; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+.qa-add-btn:active { background: #CDE8E0; }
+.qa-items { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.qa-item { display: flex; align-items: center; gap: 8px; background: var(--mint-wash); border: 1px solid #CDE8E0; border-radius: 10px; padding: 8px 10px; }
+.qa-item span { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qa-item button { flex: 0 0 auto; border: none; background: none; color: var(--ink-faint); font-size: 15px; cursor: pointer; padding: 2px 4px; -webkit-tap-highlight-color: transparent; }
 
 /* 이 기간 목표 — 얇은 접이식 요약 */
 .plangoals.slim { padding: 0; background: none; border: none; margin-bottom: 12px; }
