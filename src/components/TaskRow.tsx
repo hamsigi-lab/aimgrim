@@ -20,9 +20,11 @@ interface Props {
   onNote?: (task: ScheduleItem) => void
   /** 소속 목표 꼬리표 (목표별 그룹핑을 하지 않는 평면 리스트에서 연결감 표시) */
   goalLabel?: { title: string; category: Category }
+  /** 계획표(시간 왼쪽 거터)에선 시간 라벨 칩을 숨긴다 (거터와 중복 방지) */
+  hideTime?: boolean
 }
 
-export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove, onNote, goalLabel }: Props) {
+export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove, onNote, goalLabel, hideTime }: Props) {
   const interactive = !!onToggle
   const showApprove = canApprove && task.done && !task.approved
   const showApproved = task.done && task.approved
@@ -44,7 +46,7 @@ export function TaskRow({ task, onToggle, onEdit, onApprove, canApprove, onNote,
         <span className="tmeta">
           <span className={`who ${task.author}`}>{AUTHOR_LABEL[task.author]}</span>
           {goalLabel && <span className={`goal-chip ${goalLabel.category}`}>🎯 {goalLabel.title}</span>}
-          {task.timeLabel && <span className="time">{task.timeLabel}</span>}
+          {!hideTime && task.timeLabel && <span className="time">{task.timeLabel}</span>}
           {typeof task.minutes === 'number' && task.minutes > 0 && <span className="min-chip">⏱ {task.minutes}분</span>}
           {showApproved && <span className="approved-tag">💛 확인됨</span>}
         </span>

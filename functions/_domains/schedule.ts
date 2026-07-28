@@ -135,6 +135,78 @@ scheduleRoutes.get('/family/:familyId/overview', async (c) => {
   return c.json({ children })
 })
 
+// 가족 나란히 보기 — 자녀별 오늘 시간블록 계획을 시간축으로 (부모가 사진처럼 한눈에)
+scheduleRoutes.get('/family/:familyId/board', async (c) => {
+  const db = c.env.DB
+  const familyId = c.req.param('familyId')
+  const session = await requireSession(db, c.req.header('Cookie') ?? null)
+  if (!session || session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
+
+  const date = familyDate(familyId)
+  const isWk = isWeekdayOf(date), dBit = dayBitOf(date)
+  const kids = await db.prepare("SELECT id, display_name FROM members WHERE family_id = ? AND role = 'child' ORDER BY created_at")
+    .bind(familyId).all<{ id: string; display_name: string }>()
+
+  const children = []
+  for (const k of kids.results) {
+    const rows = await db.prepare(`
+      SELECT t.id, t.title, t.category, t.points, t.time_label, t.start_min, t.end_min, c.done
+      FROM tasks t LEFT JOIN completions c ON c.task_id = t.id AND c.the_date = ?
+      WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
+      ORDER BY t.sort_order`)
+      .bind(date, k.id, ...dayRecurBinds(date, isWk, dBit))
+      .all<{ id: string; title: string; category: string; points: number; time_label: string | null; start_min: number | null; end_min: number | null; done: number | null }>()
+    const tasks = rows.results.map((r) => ({
+      id: r.id, title: r.title, category: r.category, points: r.points, done: !!r.done,
+      startMin: r.start_min ?? parseTimeLabel(r.time_label), endMin: r.end_min ?? null,
+    }))
+    children.push({ id: k.id, name: k.display_name, tasks })
+  }
+  return c.json({ date, children })
+})
+
+// '어제처럼 복사' — 다른 날짜의 하루 계획을 오늘로 복사. 이미 있는 제목은 건너뜀(중복 방지).
+scheduleRoutes.post('/family/:familyId/copy-day', async (c) => {
+  const db = c.env.DB
+  const familyId = c.req.param('familyId')
+  const body = await c.req.json<{ childId?: string; from?: string; to?: string }>().catch(() => ({} as { childId?: string; from?: string; to?: string }))
+  const childId = body.childId ?? ''
+  const auth = await authChild(db, c.req.header('Cookie') ?? null, childId)
+  if (!auth || auth.session.family_id !== familyId) return c.json({ error: 'unauthorized' }, 401)
+
+  const iso = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
+  const to = iso(body.to) ? body.to! : familyDate(familyId)
+  const from = iso(body.from) ? body.from! : ''
+  if (!from || from === to) return c.json({ error: 'invalid_date' }, 400)
+
+  // 원본(from)의 그날 보이는 하루 할일 (반복 규칙 적용)
+  const src = await db.prepare(`
+    SELECT t.title, t.category, t.points, t.time_label, t.start_min, t.end_min, t.goal_id
+    FROM tasks t WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}
+    ORDER BY t.sort_order`)
+    .bind(childId, ...dayRecurBinds(from, isWeekdayOf(from), dayBitOf(from)))
+    .all<{ title: string; category: string; points: number; time_label: string | null; start_min: number | null; end_min: number | null; goal_id: string | null }>()
+  // 대상(to)에 이미 보이는 제목 (중복 방지: 매일 반복 등으로 이미 뜨는 것은 복사 안 함)
+  const dst = await db.prepare(`
+    SELECT t.title FROM tasks t WHERE t.child_id = ? AND t.period = 'day' AND substr(t.id,1,3) <> 'gp_' AND ${DAY_RECUR_SQL}`)
+    .bind(childId, ...dayRecurBinds(to, isWeekdayOf(to), dayBitOf(to))).all<{ title: string }>()
+  const have = new Set(dst.results.map((r) => r.title))
+
+  const now = Date.now()
+  let order = (await db.prepare("SELECT COALESCE(MAX(sort_order),0) AS n FROM tasks WHERE child_id = ? AND period = 'day'").bind(childId).first<{ n: number }>())?.n ?? 0
+  const stmts = []
+  for (const t of src.results) {
+    if (have.has(t.title)) continue
+    order++
+    stmts.push(db.prepare(
+      `INSERT INTO tasks (id, family_id, child_id, title, category, period, author_id, points, the_date, time_label, progress, progress_label, recur, recur_days, goal_id, start_date, end_date, start_min, end_min, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, 'day', ?, ?, ?, ?, 0, NULL, 'once', NULL, ?, NULL, NULL, ?, ?, ?, ?)`)
+      .bind(randomId('task'), familyId, childId, t.title, t.category, auth.session.member_id, t.points, to, t.time_label ?? null, t.goal_id ?? null, t.start_min ?? null, t.end_min ?? null, order, now))
+  }
+  if (stmts.length) await db.batch(stmts)
+  return c.json({ ok: true, added: stmts.length })
+})
+
 // 데모 가족은 인증 없이 열람 가능(체험), 그 외 가족은 세션이 같은 가족이어야 함
 scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   const familyId = c.req.param('familyId')

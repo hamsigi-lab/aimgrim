@@ -125,6 +125,17 @@ export function getOverview(familyId: string): Promise<{ children: ChildOverview
   return fetch(`/api/family/${familyId}/overview`).then((r) => json<{ children: ChildOverview[] }>(r))
 }
 
+// 가족 나란히 보기 — 자녀별 오늘 시간블록 계획 (부모가 시간축으로 한눈에)
+export interface BoardTask { id: string; title: string; category: string; points: number; done: boolean; startMin: number | null; endMin: number | null }
+export interface BoardChild { id: string; name: string; tasks: BoardTask[] }
+export function getBoard(familyId: string): Promise<{ date: string; children: BoardChild[] }> {
+  return fetch(`/api/family/${familyId}/board`).then((r) => json<{ date: string; children: BoardChild[] }>(r))
+}
+
+// '어제처럼 복사' — 다른 날짜의 하루 계획을 오늘로 복사 (이미 있는 제목은 건너뜀)
+export const copyDay = (familyId: string, input: { childId: string; from: string; to: string }) =>
+  mutate<{ ok: boolean; added: number }>(`/api/family/${familyId}/copy-day`, 'POST', input)
+
 // ---- 가족 캘린더 ----
 export type EventCategory = 'family' | 'school' | 'birthday' | 'trip' | 'etc'
 export interface FamilyEvent {

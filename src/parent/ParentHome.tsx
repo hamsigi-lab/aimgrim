@@ -5,6 +5,7 @@ import { Mascot } from '../components/Mascot'
 import { MenuSheet } from '../components/MenuSheet'
 import { AddChildForm } from '../onboarding/AddChildForm'
 import { ActivityView } from './ActivityView'
+import { FamilyBoard } from './FamilyBoard'
 
 const fh = (m: number) => (m < 60 ? `${m}분` : `${Math.round((m / 60) * 10) / 10}시간`)
 
@@ -14,6 +15,7 @@ export function ParentHome() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [viewChild, setViewChild] = useState<{ id: string; name: string } | null>(null)
+  const [board, setBoard] = useState(false)
 
   const load = () => { if (familyId) getOverview(familyId).then((r) => setOverview(r.children)).catch(() => setOverview([])) }
   useEffect(load, [familyId])
@@ -39,6 +41,13 @@ export function ParentHome() {
       <main className="body">
         <p className="ph-hello">안녕하세요, <b>{parentName}</b>님 👋<br />아이의 하루를 함께 만들어요.</p>
 
+        {overview && overview.length > 0 && (
+          <div className="view-seg ph-seg" role="tablist" aria-label="보기 전환">
+            <button type="button" role="tab" aria-selected={!board} className={!board ? 'on' : ''} onClick={() => setBoard(false)}>카드</button>
+            <button type="button" role="tab" aria-selected={board} className={board ? 'on' : ''} onClick={() => setBoard(true)}>가족 나란히</button>
+          </div>
+        )}
+
         {overview === null ? (
           <p className="empty-hint">불러오는 중…</p>
         ) : overview.length === 0 ? (
@@ -46,6 +55,8 @@ export function ParentHome() {
             <div className="mw" style={{ width: 96, height: 96, margin: '0 auto' }}><Mascot /></div>
             <p className="empty-hint">아직 등록된 자녀가 없어요.</p>
           </div>
+        ) : board ? (
+          <FamilyBoard familyId={familyId!} onOpenChild={(id, name) => setViewChild({ id, name })} />
         ) : (
           <div className="ph-cards">
             {overview.map((ch) => {

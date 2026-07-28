@@ -7,12 +7,14 @@ import { TaskEditor, type Prefill } from '../components/TaskEditor'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
-import { approveTask, toggleTask as apiToggle, fetchDayTasks, getStudy, DEMO_FAMILY, type StudySnapshot } from '../api'
+import { approveTask, toggleTask as apiToggle, fetchDayTasks, getStudy, copyDay, DEMO_FAMILY, type StudySnapshot } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem, GoalItem } from '../types'
 
 const fh = (m: number) => `${Math.round((m / 60) * 10) / 10}시간`
 function fmtT(m: number): string { const h = Math.floor(m / 60), mm = m % 60; const ap = h < 12 ? '오전' : '오후'; const hh = h % 12 || 12; return `${ap} ${hh}${mm ? ':' + String(mm).padStart(2, '0') : '시'}` }
+// 계획표 왼쪽 시간 거터 (24시 표기, 생활계획표처럼) — 7:30, 16:20
+const fmtGut = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
 function Check() {
   return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
@@ -39,6 +41,8 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
   const [otherTasks, setOtherTasks] = useState<ScheduleItem[] | null>(null)
   const [otherBusy, setOtherBusy] = useState(false)
   const [study, setStudy] = useState<StudySnapshot | null>(null)
+  const [goalsOpen, setGoalsOpen] = useState(false)
+  const [copying, setCopying] = useState(false)
   const [nowMin, setNowMin] = useState(() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() })
   useEffect(() => { const t = window.setInterval(() => { const d = new Date(); setNowMin(d.getHours() * 60 + d.getMinutes()) }, 60000); return () => window.clearInterval(t) }, [])
 
@@ -109,6 +113,17 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
     refresh() // 로딩 화면 없이 갱신 (기록 창 유지)
   }
   function afterNote() { if (isToday) refresh(); else refetchOther() }
+  // '어제 계획 가져오기' — 어제 하루 계획을 오늘로 복사(이미 있는 건 건너뜀)
+  async function copyYesterday() {
+    if (copying) return
+    setCopying(true)
+    try {
+      const r = await copyDay(fam, { childId, from: shiftISO(today, -1), to: today })
+      reload()
+      if (r.added === 0) window.alert('어제 계획 중 새로 가져올 게 없어요. (이미 오늘 있거나 매일 반복 중)')
+    } catch { window.alert('가져오지 못했어요. 잠시 후 다시 시도해 주세요.') }
+    finally { setCopying(false) }
+  }
 
   return (
     <div className="panel">
@@ -149,11 +164,14 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
         </button>
       )}
 
-      {/* 이 기간 목표 — 계획 탭에서 매일 체크(오른쪽 톱니바퀴로 관리) */}
+      {/* 이 기간 목표 — 얇은 요약 한 줄(기본 접힘). 펼치면 매일 체크 가능 */}
       {activeGoals.length > 0 && (
-        <div className="plangoals">
-          <button type="button" className="pgs-head" onClick={onGoToGoals}>🎯 이 기간 목표 {activeGoals.length} <span className="pgs-more">관리 ›</span></button>
-          {activeGoals.map((g) => (
+        <div className={`plangoals slim${goalsOpen ? ' open' : ''}`}>
+          <button type="button" className="pgs-head" onClick={() => setGoalsOpen((o) => !o)} aria-expanded={goalsOpen}>
+            <span className="pgs-t">🎯 이 기간 목표 {activeGoals.length} · 오늘 {activeGoals.filter((g) => g.todayDone).length}/{activeGoals.length} 실천</span>
+            <span className="pgs-more">{goalsOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+          </button>
+          {goalsOpen && activeGoals.map((g) => (
             <div key={g.id} className={`pgoal${g.todayDone ? ' done' : ''}`}>
               <button type="button" className="pgoal-check" disabled={isFuture} aria-pressed={!!g.todayDone}
                 aria-label={`${g.title} 오늘 실천 체크`} onClick={() => canToggle && toggleGoal(g)}><Check /></button>
@@ -173,13 +191,14 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
               )}
             </div>
           ))}
+          {goalsOpen && <button type="button" className="pgs-manage" onClick={onGoToGoals}>목표 자세히 관리 ›</button>}
         </div>
       )}
 
-      {/* 오늘 할일 — 화면 주인공. 진행 요약 + 큰 카드 평면 리스트(목표는 색·꼬리표로만) */}
+      {/* 오늘 계획표 — 화면 주인공. 왼쪽 시간·오른쪽 할일 (생활계획표) */}
       <div className="today-sum">
         <div className="ts-top">
-          <h3>{isToday ? '오늘 할일' : '이 날 할일'}</h3>
+          <h3>{isToday ? (timed.length > 0 ? '오늘 계획표' : '오늘 할일') : '이 날 계획표'}</h3>
           <span className="ts-count"><b>{doneCount}</b> / {tasks.length} 완료</span>
         </div>
         {tasks.length > 0 && <div className="ts-bar"><span className="ts-fill" style={{ width: `${pct}%` }} /></div>}
@@ -187,17 +206,22 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
-      {/* 오늘 타임라인 — 시간 있는 할일 + '지금' 마커 */}
+      {/* 시간표 — 왼쪽 시간 거터 + 할일, '지금' 선으로 현재 위치 표시 */}
       {timed.length > 0 && (
-        <div className="timeline">
+        <div className="dsched">
           {timed.map((t, i) => (
             <div key={t.id}>
               {isToday && markerIdx === i && <NowMarker min={nowMin} />}
-              <TaskRow task={t}
-                onToggle={canToggle ? handleToggle : undefined}
-                onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
-                onNote={canManage ? (task) => setNoteFor(task) : undefined}
-                canApprove={isParent && canToggle} onApprove={onApprove} />
+              <div className="dsrow">
+                <div className="ds-time"><b>{fmtGut(t.startMin!)}</b>{t.endMin != null && <span>~{fmtGut(t.endMin)}</span>}</div>
+                <div className="ds-body">
+                  <TaskRow task={t} hideTime
+                    onToggle={canToggle ? handleToggle : undefined}
+                    onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
+                    onNote={canManage ? (task) => setNoteFor(task) : undefined}
+                    canApprove={isParent && canToggle} onApprove={onApprove} />
+                </div>
+              </div>
             </div>
           ))}
           {isToday && markerIdx === -1 && <NowMarker min={nowMin} atEnd />}
@@ -207,7 +231,9 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
       {/* 언제든 할 일 — 시간 미지정(인박스) */}
       {untimed.length > 0 && (
         <>
-          {timed.length > 0 && <div className="sechead" style={{ marginTop: 14 }}><h3>언제든 할 일</h3></div>}
+          {timed.length > 0
+            ? <div className="sechead" style={{ marginTop: 14 }}><h3>언제든 할 일</h3></div>
+            : (canManage && !isFuture && <p className="empty-hint" style={{ padding: '2px 2px 8px' }}>⏰ 할일에 <b>시간</b>을 정하면 계획표(시간표)에 떠요. 각 할일의 ✎에서 시간을 정해보세요.</p>)}
           <PlanList tasks={untimed} goals={snapshot.goals} forceFlat
             onToggle={canToggle ? handleToggle : undefined}
             onEdit={canManage && isToday ? (task) => setEditor({ existing: task }) : undefined}
@@ -228,6 +254,9 @@ export function TodayPanel({ onGoToStudy, onGoToGoals }: { onGoToStudy?: () => v
         <div className="add-row" style={{ flexDirection: 'column', gap: 8 }}>
           <button type="button" className="add-btn" onClick={() => setEditor({})}>
             {isChild ? '＋ 오늘 내가 할 일 정하기' : '＋ 할일 추가'}
+          </button>
+          <button type="button" className="add-btn ghost" onClick={copyYesterday} disabled={copying}>
+            {copying ? '가져오는 중…' : '⟳ 어제 계획 가져오기'}
           </button>
           {snapshot.todayTasks.length === 0 && (
             <button type="button" className="add-btn tpl" onClick={() => setTemplates(true)}>✨ 추천 루틴으로 시작하기</button>
