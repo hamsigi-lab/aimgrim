@@ -1,5 +1,5 @@
 // 순공시간(순수 공부시간) 도메인 — 과목(색) + 학습 세션 기록/통계.
-// 설계 원칙(딥리서치): 순위·경쟁 없음, '나의 기록·성취'로. 시간엔 별점 미지급.
+// 설계 원칙(딥리서치): 순위·경쟁 없음, '나의 기록·성취'로. 순공 시간도 별점에 반영(30분당 30점).
 import { Hono } from 'hono'
 import { randomId } from '../_lib/crypto'
 import { type Bindings, authChild, requireSession, familyDate } from '../_lib/core'
@@ -11,8 +11,8 @@ const DEFAULT_SUBJECTS: [string, string][] = [
   ['과학', '#FF7EA6'], ['사회', '#FFC94D'], ['기타', '#7FB2F0'],
 ]
 
-// 순공 자동 별점: 30분당 +2, 하루 상한 +12(=3시간) / 일일 목표 +10 / 기간 마일스톤 25·50·75·100%
-const TIME_PER_30 = 2, TIME_CAP = 12, DAILY_GOAL_BONUS = 10
+// 순공 자동 별점: 30분당 +30, 하루 상한 +300(=5시간, 어뷰즈 방지) / 일일 목표 +10 / 기간 마일스톤 25·50·75·100%
+const TIME_PER_30 = 30, TIME_CAP = 300, DAILY_GOAL_BONUS = 10
 const MILESTONES: [number, number][] = [[25, 20], [50, 30], [75, 40], [100, 100]]
 const timePtsFor = (min: number) => Math.min(TIME_CAP, Math.floor(min / 30) * TIME_PER_30)
 

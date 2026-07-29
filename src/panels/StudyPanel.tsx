@@ -32,7 +32,7 @@ function readTimer(key: string): TimerState | null {
 }
 
 /** 순공시간 탭 — 정직한 스톱워치(순공 실측) + 과목 기록 + 오늘/주/월 시각화.
- *  순위·경쟁 없음, '나의 기록·성취'로. 시간엔 별점 미지급. */
+ *  순위·경쟁 없음, '나의 기록·성취'로. 순공 시간도 별점 반영(30분당 30점, 하루 상한). */
 export function StudyPanel() {
   const { childId, refresh } = useApp()
   const { status, familyId } = useAuth()
