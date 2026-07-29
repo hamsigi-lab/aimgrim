@@ -220,8 +220,8 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
   }
 
   const child = await db
-    .prepare('SELECT display_name, points FROM members WHERE id = ? AND family_id = ? AND role = \'child\'')
-    .bind(childId, familyId).first<{ display_name: string; points: number }>()
+    .prepare('SELECT display_name, points, nag_count FROM members WHERE id = ? AND family_id = ? AND role = \'child\'')
+    .bind(childId, familyId).first<{ display_name: string; points: number; nag_count: number | null }>()
   if (!child) return c.json({ error: 'child_not_found' }, 404)
 
   const date = familyDate(familyId)
@@ -357,7 +357,7 @@ scheduleRoutes.get('/family/:familyId/snapshot', async (c) => {
     streak,
     dayTaskCount: dayRows.results.length,
     history,
-    child: { name: child.display_name, points: child.points },
+    child: { name: child.display_name, points: child.points, nagCount: child.nag_count ?? 0 },
     todayTasks: dayRows.results.map(mapTask),
     goals,
     weekGoals: week.results.map((r) => mapGoal(r, weekStart, weekEnd)),
@@ -621,4 +621,42 @@ scheduleRoutes.post('/tasks/:taskId/note', async (c) => {
      ON CONFLICT(task_id, the_date) DO UPDATE SET note = excluded.note, minutes = excluded.minutes`)
     .bind(taskId, date, note, minutes, Date.now()).run()
   return c.json({ ok: true })
+})
+
+// 잔소리 카드 — 부모가 잔소리 1회 기록(delta=-1이면 취소). 5회 모이면 별점 감점 후 -5 (원안).
+const NAG_LIMIT = 5, NAG_PENALTY = 20
+scheduleRoutes.post('/children/:id/nag', async (c) => {
+  const db = c.env.DB
+  const childId = c.req.param('id')
+  const session = await readSessionParent(db, c.req.header('Cookie') ?? null)
+  if (!session) return c.json({ error: 'unauthorized' }, 401)
+  const child = await db.prepare("SELECT id, family_id, points, nag_count FROM members WHERE id = ? AND role = 'child'")
+    .bind(childId).first<{ id: string; family_id: string; points: number; nag_count: number | null }>()
+  if (!child || child.family_id !== session.family_id) return c.json({ error: 'forbidden' }, 403)
+
+  const body = await c.req.json<{ delta?: number }>().catch(() => ({} as { delta?: number }))
+  const now = Date.now()
+  let nag = child.nag_count ?? 0
+  let points = child.points
+  let penalized = false
+
+  if (body.delta === -1) {
+    nag = Math.max(0, nag - 1) // 오탭 취소 — 감점은 되돌리지 않음(누적만 감소)
+    await db.prepare('UPDATE members SET nag_count = ? WHERE id = ?').bind(nag, childId).run()
+  } else {
+    nag += 1
+    if (nag >= NAG_LIMIT) {
+      nag -= NAG_LIMIT
+      penalized = true
+      points = Math.max(0, points - NAG_PENALTY)
+      await db.batch([
+        db.prepare('UPDATE members SET points = MAX(0, points - ?), nag_count = ? WHERE id = ?').bind(NAG_PENALTY, nag, childId),
+        db.prepare('INSERT INTO point_ledger (id, child_id, delta, reason, task_id, note, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+          .bind(randomId('pl'), childId, -NAG_PENALTY, 'nag_penalty', `잔소리 ${NAG_LIMIT}회`, now),
+      ])
+    } else {
+      await db.prepare('UPDATE members SET nag_count = ? WHERE id = ?').bind(nag, childId).run()
+    }
+  }
+  return c.json({ ok: true, nagCount: nag, points, penalized, penalty: NAG_PENALTY, limit: NAG_LIMIT })
 })

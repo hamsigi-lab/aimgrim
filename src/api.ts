@@ -136,6 +136,10 @@ export function getBoard(familyId: string): Promise<{ date: string; children: Bo
 export const copyDay = (familyId: string, input: { childId: string; from: string; to: string }) =>
   mutate<{ ok: boolean; added: number }>(`/api/family/${familyId}/copy-day`, 'POST', input)
 
+// 잔소리 카드 — 부모가 잔소리 1회 기록(delta=-1이면 취소). 5회면 별점 감점.
+export const nagChild = (childId: string, delta = 1) =>
+  mutate<{ ok: boolean; nagCount: number; points: number; penalized: boolean; penalty: number; limit: number }>(`/api/children/${childId}/nag`, 'POST', { delta })
+
 // ---- 가족 캘린더 ----
 export type EventCategory = 'family' | 'school' | 'birthday' | 'trip' | 'etc'
 export interface FamilyEvent {

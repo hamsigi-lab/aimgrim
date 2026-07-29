@@ -81,6 +81,12 @@ button { font-family: inherit; }
 .points .star { width: 20px; height: 20px; display: grid; place-items: center; }
 .points b { font-variant-numeric: tabular-nums; font-size: 16px; font-family: var(--round); color: var(--gold); }
 .points.bump { animation: bump .5s cubic-bezier(.3, 1.6, .5, 1); }
+/* 잔소리 카드 — 별점 옆. 부모가 누르면 +1, 5회면 감점 */
+.nagcard { display: inline-flex; align-items: center; gap: 3px; background: var(--apricot-wash); border: 1.5px solid var(--apricot); color: #D2673B; border-radius: 100px; padding: 6px 11px 6px 9px; font-family: inherit; font-weight: 800; cursor: pointer; margin-right: 8px; -webkit-tap-highlight-color: transparent; flex: 0 0 auto; }
+.nagcard b { font-family: var(--round); font-size: 15px; font-variant-numeric: tabular-nums; line-height: 1; }
+.nagcard .nag-max { font-size: 11px; opacity: .65; }
+.nagcard.ro { cursor: default; }
+.nagcard:active { transform: scale(.96); }
 @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
 
 /* ---------- Scroll body ---------- */

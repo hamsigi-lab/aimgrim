@@ -15,6 +15,7 @@ import { CalendarPanel } from './panels/CalendarPanel'
 import { MenuSheet } from './components/MenuSheet'
 import { SurpriseBox } from './components/SurpriseBox'
 import { Mascot } from './components/Mascot'
+import { nagChild } from './api'
 
 type BottomTab = 'goals' | 'plan' | 'study' | 'points' | 'calendar'
 type PlanView = 'day' | 'week' | 'month'
@@ -53,7 +54,7 @@ function Splash() {
 }
 
 function Shell() {
-  const { loading, error, snapshot, points, celebrateTick, lastGain, reload, surprise, clearSurprise } = useApp()
+  const { loading, error, snapshot, points, celebrateTick, lastGain, reload, refresh, childId, surprise, clearSurprise } = useApp()
   const { status, exitDemo, exitToHome, me } = useAuth()
   const isParent = status !== 'demo' && me?.member?.role === 'parent'
   const [tab, setTab] = useState<BottomTab>(() => { const t = readNav()?.tab; return NAV.some((n) => n.id === t) ? t! : 'plan' })
@@ -87,6 +88,14 @@ function Shell() {
   function goPlan(view: PlanView) {
     setPlanView(view)
     if (bodyRef.current) bodyRef.current.scrollTop = 0
+  }
+  async function handleNag() {
+    if (!window.confirm('잔소리 1회를 기록할까요? 5회가 모이면 별점이 줄어요.')) return
+    try {
+      const r = await nagChild(childId, 1)
+      if (r.penalized) window.alert(`잔소리 ${r.limit}회 — 별점 ${r.penalty}이 줄었어요 😥`)
+    } catch { /* 무시 */ }
+    refresh()
   }
 
   if (loading) return <Splash />
@@ -124,6 +133,13 @@ function Shell() {
           </div>
           <div className="name">{snapshot.child.name}의 하루</div>
         </div>
+        {!isDemo && (isParent
+          ? <button type="button" className="nagcard" onClick={handleNag} aria-label={`잔소리 ${snapshot.child.nagCount ?? 0} / 5, 누르면 1회 기록`}>
+              <span aria-hidden="true">🗯️</span><b>{snapshot.child.nagCount ?? 0}</b><span className="nag-max">/5</span>
+            </button>
+          : (snapshot.child.nagCount ?? 0) > 0 && <div className="nagcard ro" aria-label={`잔소리 ${snapshot.child.nagCount} / 5`}>
+              <span aria-hidden="true">🗯️</span><b>{snapshot.child.nagCount}</b><span className="nag-max">/5</span>
+            </div>)}
         <div className={`points${bump ? ' bump' : ''}`} aria-label={`모은 별점 ${points}점`}>
           <span className="star" aria-hidden="true">⭐</span><b>{points}</b>
         </div>

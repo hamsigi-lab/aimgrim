@@ -97,7 +97,7 @@ export interface Snapshot {
   dayTaskCount: number
   /** 완료 이력 (주간 링·월간 히트맵용) */
   history: DayHistory[]
-  child: { name: string; points: number }
+  child: { name: string; points: number; nagCount?: number }
   todayTasks: ScheduleItem[]
   /** 모든 목표(주+월) — 하위 계획 중첩 포함. 목표 탭·계획 그룹핑의 원천 */
   goals: GoalItem[]
