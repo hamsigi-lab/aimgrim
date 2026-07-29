@@ -6,10 +6,11 @@ import { QuickAddTask } from '../components/QuickAddTask'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
-import { approveTask, toggleTask as apiToggle, fetchDayTasks, copyDay, DEMO_FAMILY } from '../api'
+import { approveTask, toggleTask as apiToggle, fetchDayTasks, copyDay, getStudy, DEMO_FAMILY, type StudySnapshot } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
+const fh = (m: number) => (m <= 0 ? '0분' : m < 60 ? `${m}분` : `${Math.round((m / 60) * 10) / 10}시간`)
 function fmtT(m: number): string { const h = Math.floor(m / 60), mm = m % 60; const ap = h < 12 ? '오전' : '오후'; const hh = h % 12 || 12; return `${ap} ${hh}${mm ? ':' + String(mm).padStart(2, '0') : '시'}` }
 // 계획표 왼쪽 시간 거터 (24시 표기, 생활계획표처럼) — 7:30, 16:20
 const fmtGut = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
@@ -17,7 +18,7 @@ function NowMarker({ min, atEnd }: { min: number; atEnd?: boolean }) {
   return <div className={`now-marker${atEnd ? ' end' : ''}`}><span className="nm-dot" aria-hidden="true" /><span className="nm-lab">지금 {fmtT(min)}</span><span className="nm-line" aria-hidden="true" /></div>
 }
 
-export function TodayPanel() {
+export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
   const { snapshot, childId, toggleTask, reload, refresh } = useApp()
   const { status, me, familyId } = useAuth()
   const [editor, setEditor] = useState<ScheduleItem | null>(null) // ✎ 고치기(시간·반복·별점·삭제)
@@ -29,6 +30,7 @@ export function TodayPanel() {
   const [otherTasks, setOtherTasks] = useState<ScheduleItem[] | null>(null)
   const [otherBusy, setOtherBusy] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [study, setStudy] = useState<StudySnapshot | null>(null)
   const [nowMin, setNowMin] = useState(() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() })
   useEffect(() => { const t = window.setInterval(() => { const d = new Date(); setNowMin(d.getHours() * 60 + d.getMinutes()) }, 60000); return () => window.clearInterval(t) }, [])
 
@@ -46,6 +48,9 @@ export function TodayPanel() {
       .catch(() => setOtherTasks([]))
       .finally(() => setOtherBusy(false))
   }, [date, isToday, fam, childId])
+
+  // 순공 요약 — 계획 탭 상단에 표시
+  useEffect(() => { getStudy(fam, childId).then(setStudy).catch(() => setStudy(null)) }, [fam, childId])
 
   if (!snapshot) return null
 
@@ -121,6 +126,17 @@ export function TodayPanel() {
         <button type="button" className="date-arrow" aria-label="다음 날" onClick={() => setViewDate(shiftISO(date, 1))}>›</button>
         {!isToday && <button type="button" className="date-today" onClick={() => setViewDate(today)}>오늘로</button>}
       </div>
+
+      {/* 순공 요약 — 상단에 (탭하면 순공 탭) */}
+      {isToday && study && (study.today.totalMin > 0 || study.goals.length > 0) && (
+        <button type="button" className="study-strip" onClick={onGoToStudy}>
+          <span className="ss-today">⏱ 오늘 순공 <b>{fh(study.today.totalMin)}</b></span>
+          {study.goals[0] && (
+            <span className="ss-goal">{fh(study.goals[0].accumulatedMin)}/{fh(study.goals[0].targetMin)}{study.goals[0].daysLeft >= 0 ? ` · D-${study.goals[0].daysLeft}` : ''}</span>
+          )}
+          <span className="ss-arrow" aria-hidden="true">›</span>
+        </button>
+      )}
 
       {isFuture && <p className="empty-hint" style={{ paddingBottom: 6 }}>다가올 계획이에요. 완료 체크는 그날 할 수 있어요.</p>}
 
