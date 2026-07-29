@@ -6,7 +6,7 @@ import { QuickAddTask } from '../components/QuickAddTask'
 import { NoteEditor } from '../components/NoteEditor'
 import { EncourageComposer } from '../components/EncourageComposer'
 import { TemplatePicker } from '../components/TemplatePicker'
-import { approveTask, toggleTask as apiToggle, fetchDayTasks, copyDay, getStudy, DEMO_FAMILY, type StudySnapshot } from '../api'
+import { toggleTask as apiToggle, fetchDayTasks, copyDay, getStudy, DEMO_FAMILY, type StudySnapshot } from '../api'
 import { dateHeader, shiftISO } from '../lib/calendar'
 import type { ScheduleItem } from '../types'
 
@@ -79,10 +79,6 @@ export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
     fetchDayTasks(date, fam, childId).then((r) => setOtherTasks(r.tasks)).catch(() => {})
     reload()
   }
-  async function onApprove(id: string) {
-    await approveTask(id)
-    if (isToday) reload(); else refetchOther()
-  }
   async function handleToggle(id: string) {
     const t = tasks.find((x) => x.id === id)
     const wasDone = !!t?.done
@@ -107,12 +103,11 @@ export function TodayPanel({ onGoToStudy }: { onGoToStudy?: () => void }) {
     finally { setCopying(false) }
   }
 
+  // 사이드 액션 = 수정(✎)만. 완료는 왼쪽 체크로, 기록은 완료 시 자동으로 뜸.
   const rowProps = (t: ScheduleItem) => ({
     task: t,
     onToggle: canToggle ? handleToggle : undefined,
     onEdit: canManage && isToday ? (task: ScheduleItem) => setEditor(task) : undefined,
-    onNote: canManage ? (task: ScheduleItem) => setNoteFor(task) : undefined,
-    canApprove: isParent && canToggle, onApprove,
   })
 
   return (

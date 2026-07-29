@@ -111,8 +111,6 @@ function Shell() {
     )
   }
 
-  const pendingApprovals = snapshot.todayTasks.filter((t) => t.done && !t.approved).length
-
   return (
     <div className="app">
       {isDemo && (
@@ -129,7 +127,6 @@ function Shell() {
         <div className="hi">
           <div className="greet">
             {isParent ? '아이의 하루를 함께 봐요 💛' : '안녕, 오늘도 반가워 👋'}
-            {isParent && pendingApprovals > 0 && <span className="pending-badge">확인 {pendingApprovals}</span>}
           </div>
           <div className="name">{snapshot.child.name}의 하루</div>
         </div>

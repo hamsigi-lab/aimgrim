@@ -65,9 +65,7 @@ export function ParentHome() {
                 <button type="button" className="ph-card" key={ch.id} onClick={() => setViewChild({ id: ch.id, name: ch.name })}>
                   <div className="ph-av" aria-hidden="true">🌱</div>
                   <div className="ph-mid">
-                    <div className="ph-name">{ch.name}
-                      {ch.pending > 0 && <span className="pending-badge">확인 {ch.pending}</span>}
-                    </div>
+                    <div className="ph-name">{ch.name}</div>
                     <div className="ph-bar"><i style={{ width: `${pct}%` }} /></div>
                     <div className="ph-chips">
                       <span className="phc">📋 오늘 할일 <b>{ch.todayDone}/{ch.todayTotal}</b></span>
